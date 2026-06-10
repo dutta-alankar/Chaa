@@ -1,6 +1,8 @@
 # Chaa ☕
 
-**Chaa** (চা — *tea*, served hot) is a finite-volume solver for the
+**Chaa** stands for **Ch**apel-based **H**ydrodynamics for
+**A**strophysical **A**pplications — with an obvious playful reference
+to Bengali চা (*tea*, served hot). It is a finite-volume solver for the
 compressible Euler / Navier–Stokes equations, written entirely in
 [Chapel](https://chapel-lang.org). It runs in **1D, 2D and 3D** on
 uniform structured grids in **Cartesian, cylindrical, polar and

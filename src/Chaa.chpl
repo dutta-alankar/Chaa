@@ -12,12 +12,15 @@
  */
 module Chaa {
   use Params, Grid, State, Eos, Hydro, Boundary, Problems, Evolve, Output;
+  use Logo;
   use Time, FileSystem, Math;
 
   proc printBanner() {
-    writeln("=========================================================");
-    writeln("  Chaa — Chapel hydrodynamics  (brewed fresh, served hot)");
-    writeln("=========================================================");
+    printLogo();
+    writeln("=============================================================");
+    writeln("  Chaa — Chapel-based Hydrodynamics for Astrophysical");
+    writeln("         Applications            (চা: brewed fresh, served hot)");
+    writeln("=============================================================");
     writeln("  problem    : ", problem);
     writeln("  geometry   : ", geometry, "  (", ndim, "D)");
     writeln("  grid       : ", nx1, " x ", nx2, " x ", nx3);
