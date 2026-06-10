@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build (chapel ${{ matrix.chapel }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chapel: ["2.8.0"]
+    container:
+      image: chapel/chapel:${{ matrix.chapel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install build deps
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq make libhdf5-dev > /dev/null
+      - name: compile (with HDF5)
+        run: make
+      - name: compile smoke test
+        run: ./bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaa-bin
+          path: bin/chaa
+
+  build-no-hdf5:
+    name: build without HDF5
+    runs-on: ubuntu-latest
+    container:
+      image: chapel/chapel:2.8.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: install build deps
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq make > /dev/null
+      - name: compile (HDF5 disabled)
+        run: make HDF5=0
+      - name: smoke test
+        run: ./bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
+
+  test:
+    name: ${{ matrix.case }}
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: chapel/chapel:2.8.0
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - sod-1d-cart
+          - sod-1d-cyl
+          - sod-1d-sph
+          - twoblast-1d
+          - sedov-1d-sph
+          - sedov-2d-cyl
+          - sedov-2d-sph
+          - sedov-3d-cart
+          - sedov-3d-sph
+          - blast-2d-polar
+          - blast-3d-polar
+          - riemann2d
+          - dmr
+          - kh
+          - rt
+          - vortex
+          - taylor-couette
+          - cylinder-flow
+    steps:
+      - uses: actions/checkout@v4
+      - name: install runtime deps
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq libhdf5-dev python3-numpy python3-h5py > /dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: chaa-bin
+          path: bin
+      - name: run and validate
+        run: |
+          chmod +x bin/chaa tests/run_case.sh
+          tests/run_case.sh ${{ matrix.case }}

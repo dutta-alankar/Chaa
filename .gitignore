@@ -1,0 +1,6 @@
+bin/
+output/
+test-output/
+*.dSYM/
+__pycache__/
+*.pyc
