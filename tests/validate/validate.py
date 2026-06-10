@@ -39,6 +39,17 @@ def sod_1d_cart(outdir):
     check(abs(h["time"][0] - 0.2) < 1e-10, "hdf5 time stamp == 0.2")
 
 
+def sod_1d_exact_rs(outdir):
+    """Godunov scheme with the built-in exact Riemann solver."""
+    d = load_txt(last(outdir, "txt"))
+    x, rho = d[:, 0], d[:, 1]
+    re, ue, pe = exact_riemann.solution(x, t=0.2)
+    L1 = np.abs(rho - re).mean()
+    print(f"  L1(rho), exact-RS scheme vs exact solution: {L1:.4e}")
+    check(L1 < 0.012, f"L1(rho)={L1:.3e} < 0.012")
+    check(np.isfinite(d).all(), "all values finite")
+
+
 def sod_1d_radial(outdir):
     d = load_txt(last(outdir, "txt"))
     rho = d[:, 1]
@@ -230,6 +241,7 @@ def cylinder_flow(outdir):
 
 CASES = {
     "sod-1d-cart": sod_1d_cart,
+    "sod-1d-exact": sod_1d_exact_rs,
     "sod-1d-cyl": sod_1d_radial,
     "sod-1d-sph": sod_1d_radial,
     "twoblast-1d": twoblast,

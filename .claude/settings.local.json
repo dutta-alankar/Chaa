@@ -41,7 +41,16 @@
       "Bash(git init *)",
       "Bash(git add *)",
       "Bash(git -c 'user.name=Alankar Dutta' -c user.email=dutta.alankar@gmail.com commit -q -m 'Chaa: finite-volume hydrodynamics in Chapel *)",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "Bash(exit 0)",
+      "Bash(exit 1)",
+      "Bash(gh repo *)",
+      "Bash(gh run *)",
+      "Bash(cmake -B build)",
+      "Bash(cmake --build build)",
+      "Bash(PY=/Users/alankard/coding/chapel-coding/chaa-venv/bin/python ctest --test-dir build -j 4)",
+      "Bash(git -c 'user.name=Alankar Dutta' -c user.email=dutta.alankar@gmail.com commit -q -m 'Restructure: per-problem files, ini/CLI param layering, CMake, exact Riemann solver *)",
+      "Bash(git push *)"
     ]
   }
 }

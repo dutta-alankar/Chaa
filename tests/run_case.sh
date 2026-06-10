@@ -7,7 +7,10 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 CONF="$HERE/tests/cases.conf"
-: "${CHAA_BIN:=$HERE/bin/chaa}"
+if [ -z "${CHAA_BIN:-}" ]; then
+  if [ -x "$HERE/bin/chaa" ]; then CHAA_BIN="$HERE/bin/chaa"
+  else CHAA_BIN="$HERE/build/bin/chaa"; fi
+fi
 : "${PY:=python3}"
 : "${TEST_OUT:=$HERE/test-output}"
 

@@ -8,8 +8,7 @@
 module Hdf5IO {
   use Params, Grid;
   use CTypes;
-
-  config param hdf5Enabled = false;
+  import CompileParams.hdf5Enabled;   // compile_params.chpl
 
   type hid = int(64);
 

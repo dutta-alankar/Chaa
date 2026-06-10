@@ -33,7 +33,7 @@ code is built around.
 | ingredient        | options                                                          |
 |-------------------|------------------------------------------------------------------|
 | reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`) |
-| Riemann solver    | Rusanov (`llf`), `hll`, `hllc`                                   |
+| Riemann solver    | Rusanov (`llf`), `hll`, `hllc`, `exact` (iterative Godunov)      |
 | time integration  | `euler`, SSP `rk2`, SSP `rk3`                                    |
 | source terms      | well-balanced curvilinear geometry, uniform gravity              |
 | diffusion         | explicit viscosity: full stress tensor (Cartesian), τ<sub>Rφ</sub> (cylindrical/polar) |
@@ -58,28 +58,41 @@ etc.), covering 1D (x / r), 2D (x,y / R,z / R,φ / r,θ) and 3D
 
 ## Building
 
-Requires Chapel ≥ 2.8 (`brew install chapel`, or the
+Requires CMake ≥ 3.16, Chapel ≥ 2.8 (`brew install chapel`, or the
 [`chapel/chapel` docker image](https://hub.docker.com/r/chapel/chapel)) and,
 for HDF5 output, libhdf5 (`brew install hdf5` / `apt install libhdf5-dev`).
 
 ```sh
-make            # optimized, with HDF5 output support
-make HDF5=0     # no HDF5 dependency
-make debug      # bounds checking, -g
+cmake -B build                  # -DCHAA_HDF5=OFF to drop the HDF5 dependency
+cmake --build build             # -> build/bin/chaa
+ctest --test-dir build          # run the validated test suite
 ```
+
+Compile-time parameters (ghost-layer count, HDF5 support) live in
+[`src/compile_params.chpl`](src/compile_params.chpl) and map to CMake
+options (`-DCHAA_NG=…`, `-DCHAA_HDF5=…`).
 
 ## Running
 
-Everything is a `config const` — set it on the command line:
+Runtime options are resolved with the precedence
+
+```
+command line  (--key=value)   >   runtime_params.ini   >   built-in default
+```
+
+[`runtime_params.ini`](runtime_params.ini) (looked up in the working
+directory, or anywhere via `--paramsFile=…`) holds the run configuration;
+any key can still be overridden per-run on the command line:
 
 ```sh
-./bin/chaa --problem=sod --nx1=400 --tstop=0.2 --outFormats=txt,vtk,hdf5
-./bin/chaa --problem=sedov --geometry=spherical --nx1=512 \
-           --x1min=0 --x1max=1.2 --bcX1min=reflect --tstop=0.5
+./build/bin/chaa --problem=sod --nx1=400 --tstop=0.2 --outFormats=txt,vtk,hdf5
+./build/bin/chaa --problem=sedov --geometry=spherical --nx1=512 \
+                 --x1min=0 --x1max=1.2 --bcX1min=reflect --tstop=0.5
+./build/bin/chaa --paramsFile=my_run.ini
 
 # multi-locale (with CHPL_COMM=gasnet build):
-./bin/chaa -nl 4 --problem=sedov --geometry=cartesian \
-           --nx1=256 --nx2=256 --nx3=256
+./build/bin/chaa -nl 4 --problem=sedov --geometry=cartesian \
+                 --nx1=256 --nx2=256 --nx3=256
 ```
 
 Boundary conditions per side (`--bcX1min=…` etc.): `periodic`, `outflow`,
@@ -102,6 +115,7 @@ suite) are built in, validated quantitatively in CI on every push:
 | case | problem | geometry | validation |
 |------|---------|----------|------------|
 | `sod-1d-cart` | Sod shock tube | 1D Cartesian | L1(ρ) vs **exact Riemann solution** < 1.2 % |
+| `sod-1d-exact` | Sod with the `exact` Godunov solver | 1D Cartesian | L1(ρ) vs exact solution |
 | `sod-1d-cyl`, `sod-1d-sph` | radial shock tube | 1D cyl/sph | bounds, shock presence |
 | `twoblast-1d` | Woodward–Colella interacting blasts | 1D Cartesian | peak ρ ≈ 6 at x ≈ 0.78 |
 | `sedov-1d-sph` | Sedov–Taylor | 1D spherical | shock radius vs similarity solution (α from Kamm & Timmes), err < 4 % |
@@ -122,7 +136,7 @@ suite) are built in, validated quantitatively in CI on every push:
 Run them locally:
 
 ```sh
-tests/run_case.sh all              # or a single case name
+ctest --test-dir build -j 4        # or: tests/run_case.sh all | <case-name>
 ```
 
 (validation needs `python3` with `numpy` and `h5py`).
@@ -136,20 +150,28 @@ Sedov shock radius independent of angle to machine precision.
 ## Layout
 
 ```
-src/Params.chpl    runtime configuration (all config consts)
-src/Grid.chpl      closed-form mesh + curvilinear metric factors
-src/State.chpl     StencilDist-distributed field arrays
-src/Eos.chpl       gamma-law EOS, prim<->cons
-src/Recon.chpl     slope-limited reconstruction
-src/Riemann.chpl   LLF / HLL / HLLC
-src/Hydro.chpl     sweeps, geometric sources, viscosity, gravity, CFL
-src/Boundary.chpl  ghost-cell boundary conditions
-src/Problems.chpl  initial conditions + user BCs for the test problems
-src/Evolve.chpl    SSP Runge-Kutta stepping
-src/Output.chpl    txt / VTK / XDMF writers
-src/Hdf5IO.chpl    minimal HDF5 bindings + writer
-src/Chaa.chpl      driver
+runtime_params.ini        runtime configuration file (overridden by CLI)
+src/compile_params.chpl   compile-time parameters (config params)
+src/Cli.chpl              command-line layer (config consts + sentinels)
+src/IniReader.chpl        runtime_params.ini parser
+src/Params.chpl           effective parameters (CLI > ini > default)
+src/Grid.chpl             closed-form mesh + curvilinear metric factors
+src/State.chpl            StencilDist-distributed field arrays
+src/Eos.chpl              gamma-law EOS, prim<->cons
+src/Recon.chpl            slope-limited reconstruction
+src/Riemann.chpl          LLF / HLL / HLLC / exact
+src/Hydro.chpl            sweeps, geometric sources, viscosity, gravity, CFL
+src/Boundary.chpl         ghost-cell boundary conditions
+src/Problems.chpl         problem registry/dispatcher
+src/problems/*.chpl       one file per test problem (IC + user BCs)
+src/Evolve.chpl           SSP Runge-Kutta stepping
+src/Output.chpl           txt / VTK / XDMF writers
+src/Hdf5IO.chpl           minimal HDF5 bindings + writer
+src/Chaa.chpl             driver
 ```
+
+Adding a problem = one new file in `src/problems/` with a `setup()` proc
+plus a one-line registration in `src/Problems.chpl`.
 
 ## License
 

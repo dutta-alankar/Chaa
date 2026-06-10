@@ -21,15 +21,17 @@ jobs:
       - name: install build deps
         run: |
           apt-get update -qq
-          apt-get install -y -qq make libhdf5-dev > /dev/null
-      - name: compile (with HDF5)
-        run: make
+          apt-get install -y -qq make cmake libhdf5-dev > /dev/null
+      - name: configure (cmake, with HDF5)
+        run: cmake -B build
+      - name: compile
+        run: cmake --build build
       - name: compile smoke test
-        run: ./bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
+        run: ./build/bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
       - uses: actions/upload-artifact@v4
         with:
           name: chaa-bin
-          path: bin/chaa
+          path: build/bin/chaa
 
   build-no-hdf5:
     name: build without HDF5
@@ -41,11 +43,13 @@ jobs:
       - name: install build deps
         run: |
           apt-get update -qq
-          apt-get install -y -qq make > /dev/null
-      - name: compile (HDF5 disabled)
-        run: make HDF5=0
+          apt-get install -y -qq make cmake > /dev/null
+      - name: configure and compile (HDF5 disabled)
+        run: |
+          cmake -B build -DCHAA_HDF5=OFF
+          cmake --build build
       - name: smoke test
-        run: ./bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
+        run: ./build/bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
 
   test:
     name: ${{ matrix.case }}
@@ -58,6 +62,7 @@ jobs:
       matrix:
         case:
           - sod-1d-cart
+          - sod-1d-exact
           - sod-1d-cyl
           - sod-1d-sph
           - twoblast-1d

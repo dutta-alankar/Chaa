@@ -21,8 +21,7 @@
 module Grid {
   use Params;
   use Math;
-
-  param NG = 2;          // ghost layers (2 needed for linear reconstruction)
+  import CompileParams.NG;   // ghost layers (compile_params.chpl)
 
   const ng1 = if act1 then NG else 0,
         ng2 = if act2 then NG else 0,
