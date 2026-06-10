@@ -39,5 +39,5 @@ def sedov_radius(t, gamma=1.4, E0=1.0, rho0=1.0):
 
     alpha values from Kamm & Timmes (2007), spherical symmetry.
     """
-    alpha = {1.4: 0.851072, 5.0 / 3.0: 0.493610}[round(gamma, 6)]
+    alpha = {1.4: 0.851072, 1.666667: 0.493610}[round(gamma, 6)]
     return (E0 * t * t / (alpha * rho0)) ** 0.2

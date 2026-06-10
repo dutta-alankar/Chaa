@@ -221,6 +221,89 @@ def taylor_couette(outdir):
     check(np.abs(d[:, 2]).max() < 0.1, "radial velocity small (steady state)")
 
 
+def sod_1d_iso(outdir):
+    """isothermal Sod tube vs the exact two-wave isothermal solution"""
+    d = load_txt(last(outdir, "txt"))
+    x, rho, vx, prs = d[:, 0], d[:, 1], d[:, 2], d[:, 5]
+    re, ue = exact_riemann.iso_solution(x, t=0.2, cs=1.0)
+    L1 = np.abs(rho - re).mean()
+    print(f"  L1(rho) vs exact isothermal Riemann solution: {L1:.4e}")
+    check(L1 < 0.012, f"L1(rho)={L1:.3e} < 0.012")
+    check(np.abs(vx - ue).mean() < 0.03, "L1(vx) < 0.03")
+    check(np.allclose(prs / rho, 1.0), "p = cs^2 rho enforced exactly")
+
+
+def khi_iso(outdir):
+    h0 = load_h5(sorted(glob.glob(os.path.join(outdir, "*.h5")))[0])
+    h = load_h5(last(outdir, "h5"))
+    g0 = np.abs(h0["vx2"]).max()
+    g1 = np.abs(h["vx2"]).max()
+    print(f"  max|vy|: {g0:.4f} -> {g1:.4f}")
+    check(np.isfinite(h["rho"]).all(), "all values finite")
+    check(g1 > 0.1, "shear instability grew from the interface seed")
+    check(0.5 < h["rho"].min() and h["rho"].max() < 2.0,
+          "subsonic isothermal: density stays near 1")
+
+
+def thermal_diffusion(outdir):
+    """entropy-mode decay rate vs Gamma = kappa (gam-1)/gam k^2"""
+    d0 = load_txt(sorted(glob.glob(os.path.join(outdir, "*.txt")))[0])
+    d1 = load_txt(last(outdir, "txt"))
+    a0 = np.abs(d0[:, 1] - 1.0).max()
+    a1 = np.abs(d1[:, 1] - 1.0).max()
+    kap, gamma, kw, t = 0.02, 1.4, 2.0 * np.pi, 2.0
+    ana = np.exp(-kap * (gamma - 1.0) / gamma * kw**2 * t)
+    err = abs(a1 / a0 - ana) / ana
+    print(f"  decay {a1/a0:.4f} vs analytic {ana:.4f} ({err*100:.2f}%)")
+    check(err < 0.06, f"conduction decay rate within 6% (got {err*100:.2f}%)")
+
+
+def disk_cavity(outdir):
+    """locally isothermal disk + central gravity: equilibrium holds"""
+    h0 = load_h5(sorted(glob.glob(os.path.join(outdir, "*.h5")))[0])
+    h = load_h5(last(outdir, "h5"))
+    R = h["cc_x1"]
+    v0 = h0["vx2"].mean(axis=0)
+    v1 = h["vx2"].mean(axis=0)
+    sel = (R > 1.7) & (R < 2.2)          # outside the cavity jump
+    drift = np.abs(v1[sel] - v0[sel]).max() / v0[sel].max()
+    kep = np.abs(v1[sel] / R[sel] ** -0.5 - 1.0).max()
+    print(f"  vphi drift {drift*100:.2f}%, deviation from Keplerian {kep*100:.2f}%")
+    check(np.isfinite(h["rho"]).all(), "all values finite")
+    check(drift < 0.02, "rotational equilibrium drift < 2%")
+    check(kep < 0.03, "vphi within 3% of Keplerian outside the cavity")
+    check(h["rho"].min() > 0.0, "density positive in the cavity")
+
+
+def sedov_3d_idefix(outdir):
+    """idefix SedovBlastWave: gamma=5/3 on [-0.5,0.5]^3, t=0.1"""
+    h = load_h5(last(outdir, "h5"))
+    rho, x = h["rho"], h["cc_x1"]
+    n = rho.shape[0] // 2
+    rad = abs(x[rho[n, n, :].argmax()])
+    ana = sedov_radius(0.1, gamma=5.0 / 3.0)
+    err = abs(rad - ana) / ana
+    print(f"  shock radius {rad:.3f}, analytic {ana:.4f}, err {err*100:.1f}%")
+    check(np.isfinite(rho).all(), "all values finite")
+    check(err < 0.08, f"radius error {err*100:.1f}% < 8%")
+
+
+def vortex_limo3(outdir):
+    h0 = load_h5(sorted(glob.glob(os.path.join(outdir, "*.h5")))[0])
+    h = load_h5(last(outdir, "h5"))
+    L1 = np.abs(h["rho"] - h0["rho"]).mean()
+    print(f"  L1(rho), limo3: {L1:.3e}  (linear reference ~2.1e-3)")
+    check(L1 < 2.0e-3, f"limo3 beats linear reconstruction ({L1:.2e} < 2e-3)")
+
+
+def vortex_ppm(outdir):
+    h0 = load_h5(sorted(glob.glob(os.path.join(outdir, "*.h5")))[0])
+    h = load_h5(last(outdir, "h5"))
+    L1 = np.abs(h["rho"] - h0["rho"]).mean()
+    print(f"  L1(rho), ppm+rk3: {L1:.3e}  (linear reference ~2.1e-3)")
+    check(L1 < 6.0e-4, f"ppm is high-order accurate ({L1:.2e} < 6e-4)")
+
+
 def cylinder_flow(outdir):
     h = load_h5(last(outdir, "h5"))
     vx, x, y = h["vx1"], h["cc_x1"], h["cc_x2"]
@@ -259,6 +342,13 @@ CASES = {
     "vortex": vortex,
     "taylor-couette": taylor_couette,
     "cylinder-flow": cylinder_flow,
+    "sod-1d-iso": sod_1d_iso,
+    "khi-2d-iso": khi_iso,
+    "thermal-diffusion": thermal_diffusion,
+    "disk-cavity": disk_cavity,
+    "sedov-3d-idefix": sedov_3d_idefix,
+    "vortex-limo3": vortex_limo3,
+    "vortex-ppm": vortex_ppm,
 }
 
 if __name__ == "__main__":

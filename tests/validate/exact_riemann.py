@@ -88,3 +88,56 @@ def solution(x, t, x0=0.5, left=(1.0, 0.0, 1.0), right=(0.125, 0.0, 0.1),
     for n, xi in enumerate((x - x0) / t):
         rho[n], u[n], p[n] = sample(xi, *left, *right, gamma)
     return rho, u, p
+
+
+# ------------------- isothermal exact Riemann solver ------------------- #
+def _iso_f(z, cs):
+    """velocity decrease across a wave with density ratio z = rho*/rho_K."""
+    return cs * (z - 1.0) / np.sqrt(z) if z > 1.0 else cs * np.log(z)
+
+
+def iso_solution(x, t, cs=1.0, x0=0.5, left=(1.0, 0.0), right=(0.125, 0.0)):
+    """Exact solution of the isothermal (p = cs^2 rho) Riemann problem:
+    two waves (shock or rarefaction), no contact discontinuity."""
+    rhoL, uL = left
+    rhoR, uR = right
+    lo, hi = 1e-10, 100.0 * max(rhoL, rhoR)
+    for _ in range(200):
+        rs = 0.5 * (lo + hi)
+        g = uL - _iso_f(rs / rhoL, cs) - (uR + _iso_f(rs / rhoR, cs))
+        if g > 0.0:
+            lo = rs
+        else:
+            hi = rs
+    us = uL - _iso_f(rs / rhoL, cs)
+
+    rho = np.empty_like(x)
+    u = np.empty_like(x)
+    for n, xi in enumerate((x - x0) / t):
+        if xi <= us:  # left wave
+            if rs > rhoL:  # shock
+                sL = uL - cs * np.sqrt(rs / rhoL)
+                rho[n], u[n] = (rhoL, uL) if xi <= sL else (rs, us)
+            else:  # rarefaction
+                head, tail = uL - cs, us - cs
+                if xi <= head:
+                    rho[n], u[n] = rhoL, uL
+                elif xi >= tail:
+                    rho[n], u[n] = rs, us
+                else:
+                    u[n] = xi + cs
+                    rho[n] = rhoL * np.exp((uL - u[n]) / cs)
+        else:  # right wave
+            if rs > rhoR:  # shock
+                sR = uR + cs * np.sqrt(rs / rhoR)
+                rho[n], u[n] = (rhoR, uR) if xi >= sR else (rs, us)
+            else:  # rarefaction
+                head, tail = uR + cs, us + cs
+                if xi >= head:
+                    rho[n], u[n] = rhoR, uR
+                elif xi <= tail:
+                    rho[n], u[n] = rs, us
+                else:
+                    u[n] = xi - cs
+                    rho[n] = rhoR * np.exp((u[n] - uR) / cs)
+    return rho, u

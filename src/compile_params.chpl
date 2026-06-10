@@ -7,9 +7,9 @@
  */
 module CompileParams {
 
-  /* number of ghost-cell layers per active dimension (2 is required by
-     the piecewise-linear reconstruction; raise for wider stencils) */
-  config param NG = 2;
+  /* number of ghost-cell layers per active dimension: 2 suffices for
+     constant/linear/limo3 reconstruction, 3 is needed for ppm (default) */
+  config param NG = 3;
 
   /* compile in the HDF5 writer (links against -lhdf5) */
   config param hdf5Enabled = false;

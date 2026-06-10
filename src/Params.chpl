@@ -53,10 +53,16 @@ module Params {
 
   /* --- physics --- */
   const gam      = valR(Cli.gam, "gam", 1.4);       // adiabatic index
+  const eos      = valS(Cli.eos, "eos", "ideal");   // ideal | isothermal
+  const csIso    = valR(Cli.csIso, "csIso", 1.0);   // isothermal sound speed
+  const csSlope  = valR(Cli.csSlope, "csSlope", 0.0); // cs ~ csIso*R^csSlope
   const mu       = valR(Cli.mu, "mu", 0.0);         // dynamic viscosity
+  const kappa    = valR(Cli.kappa, "kappa", 0.0);   // thermal conductivity
   const grav1    = valR(Cli.grav1, "grav1", 0.0),   // constant gravity
         grav2    = valR(Cli.grav2, "grav2", 0.0),
         grav3    = valR(Cli.grav3, "grav3", 0.0);
+  const gravCentral = valR(Cli.gravCentral, "gravCentral", 0.0); // GM (point mass)
+  const gravEps     = valR(Cli.gravEps, "gravEps", 0.0);         // softening
   const rhoFloor = valR(Cli.rhoFloor, "rhoFloor", 1.0e-12),
         prsFloor = valR(Cli.prsFloor, "prsFloor", 1.0e-14);
 
@@ -123,6 +129,10 @@ module Params {
         rtRhoBot = valR(Cli.rtRhoBot, "rtRhoBot", 1.0),
         rtPrs0   = valR(Cli.rtPrs0, "rtPrs0", 2.5),
         rtPert   = valR(Cli.rtPert, "rtPert", 0.01);
+  const diskH0    = valR(Cli.diskH0, "diskH0", 0.1),     // disk aspect ratio
+        diskJumpR = valR(Cli.diskJumpR, "diskJumpR", 1.5),
+        diskJumpW = valR(Cli.diskJumpW, "diskJumpW", 0.15);
+  const twAmp = valR(Cli.twAmp, "twAmp", 1.0e-3);   // thermalWave amplitude
 
   /* --- derived --- */
   const geom = parseGeom(geometry);
@@ -145,14 +155,16 @@ module Params {
              + (if act3 then 1 else 0);
 
   // integer codes (avoid string compares in hot loops)
-  param RECON_CONST = 0, RECON_LINEAR = 1;
+  param RECON_CONST = 0, RECON_LINEAR = 1, RECON_LIMO3 = 2, RECON_PPM = 3;
   param LIM_MINMOD = 0, LIM_VANLEER = 1, LIM_MC = 2;
   param RS_LLF = 0, RS_HLL = 1, RS_HLLC = 2, RS_EXACT = 3;
   param TI_EULER = 0, TI_RK2 = 1, TI_RK3 = 2;
+  param EOS_IDEAL = 0, EOS_ISO = 1;
   param BC_PERIODIC = 0, BC_OUTFLOW = 1, BC_REFLECT = 2, BC_AXIS = 3,
         BC_INFLOW = 4, BC_USERDEF = 5;
 
-  const reconCode = parseOpt(recon, ("constant", "linear"));
+  const eosCode = parseOpt(eos, ("ideal", "isothermal"));
+  const reconCode = parseOpt(recon, ("constant", "linear", "limo3", "ppm"));
   const limCode   = parseOpt(limiter, ("minmod", "vanleer", "mc"));
   const rsCode    = parseOpt(riemann, ("llf", "hll", "hllc", "exact"));
   const tiCode    = parseOpt(integrator, ("euler", "rk2", "rk3"));

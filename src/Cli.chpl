@@ -31,8 +31,12 @@ module Cli {
 
   /* --- physics --- */
   config const gam   = UNSET_R;
+  config const eos   = UNSET_S;
+  config const csIso = UNSET_R, csSlope = UNSET_R;
   config const mu    = UNSET_R;
+  config const kappa = UNSET_R;
   config const grav1 = UNSET_R, grav2 = UNSET_R, grav3 = UNSET_R;
+  config const gravCentral = UNSET_R, gravEps = UNSET_R;
   config const rhoFloor = UNSET_R, prsFloor = UNSET_R;
 
   /* --- numerics --- */
@@ -70,6 +74,8 @@ module Cli {
                khPert = UNSET_R, khPrs = UNSET_R;
   config const rtRhoTop = UNSET_R, rtRhoBot = UNSET_R, rtPrs0 = UNSET_R,
                rtPert = UNSET_R;
+  config const diskH0 = UNSET_R, diskJumpR = UNSET_R, diskJumpW = UNSET_R;
+  config const twAmp = UNSET_R;
 
   inline proc isUnset(v: int)    do return v == UNSET_I;
   inline proc isUnset(v: real)   do return isNan(v);

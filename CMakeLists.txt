@@ -17,7 +17,7 @@ find_program(CHPL_EXECUTABLE chpl REQUIRED
              DOC "Chapel compiler (https://chapel-lang.org)")
 
 option(CHAA_HDF5 "Enable HDF5 output (links -lhdf5)" ON)
-set(CHAA_NG "2" CACHE STRING "ghost-cell layers")
+set(CHAA_NG "3" CACHE STRING "ghost-cell layers (3 needed for ppm)")
 set(CHAA_CHPL_FLAGS "--fast" CACHE STRING "chpl optimization/extra flags")
 
 file(GLOB CHAA_SOURCES

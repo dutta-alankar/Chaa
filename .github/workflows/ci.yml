@@ -80,6 +80,13 @@ jobs:
           - vortex
           - taylor-couette
           - cylinder-flow
+          - sod-1d-iso
+          - khi-2d-iso
+          - thermal-diffusion
+          - disk-cavity
+          - sedov-3d-idefix
+          - vortex-limo3
+          - vortex-ppm
     steps:
       - uses: actions/checkout@v4
       - name: install runtime deps

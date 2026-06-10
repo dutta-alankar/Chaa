@@ -12,7 +12,7 @@ module Problems {
   use Params;
   import Sod, TwoBlast, Sedov, Blast, Riemann2D, DoubleMach,
          KelvinHelmholtz, RayleighTaylor, IsentropicVortex,
-         TaylorCouette, CylinderFlow;
+         TaylorCouette, CylinderFlow, KhIdefix, DiskCavity, ThermalWave;
 
   proc problemInit() {
     select problem {
@@ -27,6 +27,9 @@ module Problems {
       when "vortex"        do IsentropicVortex.setup();
       when "taylorCouette" do TaylorCouette.setup();
       when "cylinderFlow"  do CylinderFlow.setup();
+      when "khi"           do KhIdefix.setup();
+      when "diskCavity"    do DiskCavity.setup();
+      when "thermalWave"   do ThermalWave.setup();
       otherwise do halt("unknown problem: " + problem);
     }
   }

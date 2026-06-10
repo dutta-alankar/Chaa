@@ -28,8 +28,12 @@ module Eos {
     return w;
   }
 
-  inline proc soundSpeed(w: StateVec): real do
+  /* for the isothermal EOS the state's pressure is kept at rho*cs^2,
+     so cs = sqrt(p/rho) without the adiabatic-index factor */
+  inline proc soundSpeed(w: StateVec): real {
+    if eosCode == EOS_ISO then return sqrt(w(IPRS)/w(IRHO));
     return sqrt(gam*w(IPRS)/w(IRHO));
+  }
 
   /* physical (advective + pressure) flux of the Euler equations along
      coordinate direction dir (0,1,2), from a primitive state */

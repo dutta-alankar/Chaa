@@ -1,13 +1,16 @@
 /* Evolve.chpl — strong-stability-preserving Runge-Kutta time stepping. */
 module Evolve {
-  use Params, State, Eos, Hydro, Boundary, Problems;
+  use Params, Grid, State, Eos, Hydro, Boundary, Problems;
 
-  /* enforce floors and refresh primitives after a conservative update */
+  /* enforce floors (and the isothermal pressure constraint) and refresh
+     primitives after a conservative update */
   proc applyFloorsAndPrims() {
-    forall idx in DInt {
-      const w = cons2prim(U[idx]);
-      V[idx] = w;
-      U[idx] = prim2cons(w);   // keeps U consistent if a floor triggered
+    forall (i, j, k) in DInt {
+      var w = cons2prim(U[i,j,k]);
+      if eosCode == EOS_ISO then
+        w(IPRS) = w(IRHO)*cs2At(i, j, k);
+      V[i,j,k] = w;
+      U[i,j,k] = prim2cons(w);  // keeps U consistent if a floor triggered
     }
   }
 

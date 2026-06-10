@@ -1,6 +1,9 @@
 # Chaa ☕
 
 [![CI](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml/badge.svg)](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml)
+[![docs](https://github.com/dutta-alankar/Chaa/actions/workflows/docs.yml/badge.svg)](https://dutta-alankar.github.io/Chaa/)
+
+**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide, and a step-by-step guide to setting up your own problems.
 
 **Chaa** (চা — *tea*, served hot) is a finite-volume hydrodynamics solver
 written in [Chapel](https://chapel-lang.org). It solves the compressible
@@ -32,12 +35,20 @@ code is built around.
 
 | ingredient        | options                                                          |
 |-------------------|------------------------------------------------------------------|
-| reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`) |
+| reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`), `limo3` (Čada & Torrilhon), `ppm` (Colella & Sekora / Peterson & Hammett) |
 | Riemann solver    | Rusanov (`llf`), `hll`, `hllc`, `exact` (iterative Godunov)      |
 | time integration  | `euler`, SSP `rk2`, SSP `rk3`                                    |
-| source terms      | well-balanced curvilinear geometry, uniform gravity              |
-| diffusion         | explicit viscosity: full stress tensor (Cartesian), τ<sub>Rφ</sub> (cylindrical/polar) |
-| positivity        | density/pressure floors, slope-limited face states               |
+| equation of state | ideal gas; (locally) isothermal (`--eos=isothermal`, cs ∝ R^slope) |
+| source terms      | well-balanced curvilinear geometry, uniform gravity, central point-mass gravity |
+| diffusion         | explicit viscosity (full tensor in Cartesian, τ<sub>Rφ</sub> in cylindrical/polar); explicit thermal conduction |
+| positivity        | density/pressure floors, per-face reconstruction fallbacks       |
+
+The `limo3`/`ppm` reconstructions and the RK family mirror
+[Idefix](https://github.com/idefix-code/idefix)'s scheme set, and the test
+suite recreates the Idefix HD tests — see the
+[mapping page](https://dutta-alankar.github.io/Chaa/idefix/). On the
+isentropic-vortex accuracy test (64², one period): L1(ρ) = 2.1e-3
+(`linear`) → 9.5e-4 (`limo3`) → 2.2e-4 (`ppm`+`rk3`).
 
 The geometric source terms are discretised with the same area/volume
 factors as the flux divergence, so a uniform-pressure fluid is balanced to
@@ -132,6 +143,12 @@ suite) are built in, validated quantitatively in CI on every push:
 | `vortex` | isentropic vortex | 2D Cartesian | L1(ρ) after a full period < 8e-3, exact mass conservation |
 | `taylor-couette` | Taylor–Couette (viscous) | 1D cylindrical | steady v<sub>φ</sub>(R) vs **analytic Couette profile** < 2 % |
 | `cylinder-flow` | viscous flow past a cylinder | 2D Cartesian | no-slip solid, wake deficit |
+| `sod-1d-iso` | isothermal Sod (Idefix sod-iso) | 1D Cartesian | L1(ρ) vs **exact isothermal Riemann solution** |
+| `khi-2d-iso` | Kelvin–Helmholtz (Idefix KHI, isothermal) | 2D Cartesian | growth from interface seed |
+| `thermal-diffusion` | decaying entropy mode (Idefix) | 1D Cartesian | decay rate vs analytic Γ=κ(γ−1)k²/γ, < 6 % |
+| `disk-cavity` | Keplerian disk + cavity (Idefix RWI-cavity profile) | 2D polar | rotational equilibrium < 2 % drift |
+| `sedov-3d-idefix` | Sedov, γ=5/3 (Idefix) | 3D Cartesian | radius vs similarity solution |
+| `vortex-limo3`, `vortex-ppm` | vortex accuracy with Idefix schemes | 2D Cartesian | L1 thresholds (9.5e-4 / 2.2e-4) |
 
 Run them locally:
 

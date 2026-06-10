@@ -201,6 +201,27 @@ module Grid {
     return (x1c(i), 0.0, 0.0);
   }
 
+  /* cylindrical radius of a cell centre (distance from the rotation
+     axis), used by the locally-isothermal sound-speed profile */
+  inline proc cylRadiusAt(i: int, j: int, k: int): real {
+    select geom {
+      when Geom.cylindrical, Geom.polar do return abs(x1c(i));
+      when Geom.spherical do
+        return x1c(i)*(if act2 then sin(x2c(j)) else 1.0);
+      otherwise do return 1.0;
+    }
+    return 1.0;
+  }
+
+  /* isothermal sound speed squared: cs^2 = csIso^2 * R_cyl^(2*csSlope)
+     (csSlope = 0 gives a globally constant sound speed; csSlope = -0.5
+     with central gravity GM=1 gives cs = csIso * v_K, i.e. a constant
+     disk aspect ratio) */
+  inline proc cs2At(i: int, j: int, k: int): real {
+    if csSlope == 0.0 then return csIso*csIso;
+    return csIso*csIso * cylRadiusAt(i, j, k)**(2.0*csSlope);
+  }
+
   /* physical node (cell-corner) position mapped to output x/y/z space;
      used by the VTK / XDMF writers */
   proc nodePos(i: int, j: int, k: int): 3*real {

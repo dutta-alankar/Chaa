@@ -21,8 +21,12 @@ module Boundary {
     if act2 { applySide(2, t); applySide(3, t); }
     if act3 { applySide(4, t); applySide(5, t); }
 
-    forall idx in DAll {
-      if !isInterior(idx) then U[idx] = prim2cons(V[idx]);
+    forall (i, j, k) in DAll {
+      if !isInterior((i, j, k)) {
+        if eosCode == EOS_ISO then
+          V[i,j,k](IPRS) = V[i,j,k](IRHO)*cs2At(i, j, k);
+        U[i,j,k] = prim2cons(V[i,j,k]);
+      }
     }
     syncHalos();
   }

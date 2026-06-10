@@ -32,13 +32,19 @@ module Hydro {
           else if dir == 1 then DAll[1..nx1, 1..nx2+1, 1..nx3]
           else                  DAll[1..nx1, 1..nx2, 1..nx3+1];
 
+    const dxd = if dir == 0 then dx1 else if dir == 1 then dx2 else dx3;
+
     /* face fluxes (face idx = left face of cell idx along dir) */
     forall idx in DF {
-      const wm = V[idx-e], wc = V[idx];
       var wL, wR: StateVec;
-      faceStates(V[idx-e-e], wm, wc, V[idx+e], wL, wR);
+      if reconCode == RECON_PPM then
+        faceStatesPPM(V[idx-e-e-e], V[idx-e-e], V[idx-e],
+                      V[idx], V[idx+e], V[idx+e+e], wL, wR);
+      else
+        faceStates(V[idx-e-e], V[idx-e], V[idx], V[idx+e], dxd, wL, wR);
       var f = riemannFlux(wL, wR, dir);
       if mu > 0.0 then addViscFlux(idx, dir, f);
+      if kappa > 0.0 then addConductionFlux(idx, dir, f);
       FLX[idx] = f;
     }
     FLX.updateFluff();
@@ -102,6 +108,44 @@ module Hydro {
         s(IMX2) += w(IRHO)*grav2;
         s(IMX3) += w(IRHO)*grav3;
         s(IENG) += w(IRHO)*(w(IVX1)*grav1 + w(IVX2)*grav2 + w(IVX3)*grav3);
+      }
+
+      /* central point-mass gravity g = -GM r_vec / (r^2+eps^2)^(3/2),
+         with the mass at the coordinate origin (Cartesian: at the
+         configured centre cen1..cen3) */
+      if gravCentral > 0.0 {
+        var g: 3*real = (0.0, 0.0, 0.0);
+        select geom {
+          when Geom.spherical {
+            const r = x1c(i);
+            g(0) = -gravCentral*r/(r*r + gravEps*gravEps)**1.5;
+          }
+          when Geom.polar {                  // x1=R, x3=z
+            const R = x1c(i);
+            const z = if act3 then x3c(k) else 0.0;
+            const ir3 = 1.0/(R*R + z*z + gravEps*gravEps)**1.5;
+            g(0) = -gravCentral*R*ir3;
+            g(2) = -gravCentral*z*ir3;
+          }
+          when Geom.cylindrical {            // x1=R, x2=z
+            const R = x1c(i);
+            const z = if act2 then x2c(j) else 0.0;
+            const ir3 = 1.0/(R*R + z*z + gravEps*gravEps)**1.5;
+            g(0) = -gravCentral*R*ir3;
+            g(1) = -gravCentral*z*ir3;
+          }
+          when Geom.cartesian {
+            const p = physPos(i, j, k);
+            const d = (p(0)-cen1, p(1)-cen2, p(2)-cen3);
+            const ir3 = 1.0/(d(0)**2 + d(1)**2 + d(2)**2
+                             + gravEps*gravEps)**1.5;
+            for param c in 0..2 do g(c) = -gravCentral*d(c)*ir3;
+          }
+        }
+        for param c in 0..2 {
+          s(IMX1 + c) += w(IRHO)*g(c);
+          s(IENG)     += w(IRHO)*w(IVX1 + c)*g(c);
+        }
       }
 
       /* residual viscous source for the azimuthal momentum in
@@ -172,6 +216,18 @@ module Hydro {
     }
   }
 
+  /* explicit thermal conduction: energy flux -kappa dT/dl across the
+     face, with T = p/rho and dl the physical spacing along the sweep */
+  inline proc addConductionFlux(idx: 3*int, dir: int, ref f: StateVec) {
+    const (i, j, k) = idx;
+    const wm = V[idx - dirOffset(dir)], wc = V[idx];
+    const Tm = wm(IPRS)/wm(IRHO), Tc = wc(IPRS)/wc(IRHO);
+    const dl = if dir == 0 then dl1()
+          else if dir == 1 then dl2(i)
+          else                  dl3(i, j);
+    f(IENG) -= kappa*(Tc - Tm)/dl;
+  }
+
   /* CFL time step: advective everywhere + explicit-diffusion limit */
   proc computeDt(): real {
     const dtmin = min reduce ([idx in DInt] cellDt(idx));
@@ -199,6 +255,11 @@ module Hydro {
     var dt = cfl*dta;
     if mu > 0.0 then
       dt = min(dt, cflVisc*0.5*dlmin**2*w(IRHO)/(mu*ndim));
+    if kappa > 0.0 {
+      // thermal diffusivity chi = kappa*(gam-1)/rho
+      const chi = kappa*(gam - 1.0)/w(IRHO);
+      dt = min(dt, cflVisc*0.5*dlmin**2/(chi*ndim));
+    }
     return dt;
   }
 }

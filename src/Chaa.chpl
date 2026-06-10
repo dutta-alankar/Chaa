@@ -25,8 +25,15 @@ module Chaa {
             x2min, ",", x2max, "] x [", x3min, ",", x3max, "]");
     writeln("  solver     : ", riemann, " / ", recon, " (", limiter,
             ") / ", integrator);
-    writeln("  gamma      : ", gam, "   cfl: ", cfl);
+    if eosCode == EOS_ISO then
+      writeln("  eos        : isothermal (csIso=", csIso,
+              ", csSlope=", csSlope, ")");
+    else
+      writeln("  eos        : ideal, gamma = ", gam);
+    writeln("  cfl        : ", cfl);
     if mu > 0.0 then writeln("  viscosity  : mu = ", mu);
+    if kappa > 0.0 then writeln("  conduction : kappa = ", kappa);
+    if gravCentral > 0.0 then writeln("  gravity    : GM = ", gravCentral);
     writeln("  locales    : ", numLocales, "   tasks/locale: ",
             here.maxTaskPar);
     writeln("=========================================================");
@@ -40,6 +47,11 @@ module Chaa {
            "use geometry=polar for (R,phi,z)");
     if mu > 0.0 && geom == Geom.spherical then
       halt("viscosity is not implemented in spherical coordinates");
+    if reconCode == RECON_PPM && ng1 < 3 then
+      halt("ppm reconstruction needs 3 ghost layers: " +
+           "rebuild with -DCHAA_NG=3 (the default)");
+    if kappa > 0.0 && eosCode == EOS_ISO then
+      halt("thermal conduction requires the ideal-gas EOS");
     if geom == Geom.spherical && act2 &&
        (x2min < -1.0e-12 || x2max > pi + 1.0e-12) then
       halt("spherical: theta must lie in [0, pi]");
@@ -51,6 +63,9 @@ module Chaa {
     if !(try! exists(outDir)) then try! mkdir(outDir, parents=true);
 
     problemInit();
+    if eosCode == EOS_ISO then
+      forall (i, j, k) in DInt do
+        V[i,j,k](IPRS) = V[i,j,k](IRHO)*cs2At(i, j, k);
     forall idx in DInt do U[idx] = prim2cons(V[idx]);
     problemInternalBC(0.0);
     applyBCs(0.0);
