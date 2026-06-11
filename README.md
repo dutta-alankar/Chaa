@@ -3,7 +3,9 @@
 [![CI](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml/badge.svg)](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml)
 [![docs](https://github.com/dutta-alankar/Chaa/actions/workflows/docs.yml/badge.svg)](https://dutta-alankar.github.io/Chaa/)
 
-**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide, and a step-by-step guide to setting up your own problems.
+**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide (grid, physics modules, boundaries, particles), architecture walkthrough, per-test results, cross-code validation, and a step-by-step guide to setting up your own problems.
+
+Chaa is **cross-validated against Idefix and AthenaPK**: matched-configuration runs agree to L1 = 2.7×10⁻⁴ on Sod (vs 1.6×10⁻³ to the exact solution), 0.31 % on the double Mach reflection field, and 3×10⁻⁴ on the 3D Sedov radial profile — frozen reference profiles are re-checked in CI (`tests/reference/`).
 
 ```text
 ⢰⠢⡑⣎⡱⢣⡑⡎⢥⣃⠳⣌⠳⣘⡜⢢⡝⢢⢣⡙⠦⣙⢆⡳⢌⢣⣃⠳⣌⢱⢊⡼⡑⢎⡜⣡⢎⡱⢊⡕⢪⠜⣢⠙⡦⡙⡜⢢⢇⠣⢎⡱⢊⡜⣌⠞⡰⢩⠲⣡⢓⡬⢓⢬⡑⢣⢎⡱⣌⠳⣌⠳⣌⠥⣋⠴⣉⠦⡙⡴⣉⠶⡑⣎⢱⡊⣕⢪⡑⢎⠥⡓⡜⢬⢒⣍⠲⣉⠖⣡⢋⡬⣑⠎⡜⢆⢣⡓⣌⢣⠚⣌⢣⡙⢆⡣⢳⡘⡜
@@ -101,12 +103,12 @@ code is built around.
 
 | ingredient        | options                                                          |
 |-------------------|------------------------------------------------------------------|
-| grids             | uniform, logarithmic (`log`, `log-dec`) and geometrically stretched (`stretch`) laws per direction, closed-form metrics |
+| grids             | uniform, logarithmic (`log`, `log-dec`) and geometrically stretched (`stretch`, with a uniform anchor block via `stretchUniX*`) laws per direction, closed-form metrics |
 | reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`), `limo3` (Čada & Torrilhon), `ppm` (Colella & Sekora / Peterson & Hammett), `wenoz` (Borges et al.) |
 | Riemann solver    | Rusanov (`llf`), `hll`, `hllc`, `exact` (iterative Godunov)      |
 | time integration  | `euler`, SSP `rk2`, SSP `rk3`, `vl2` (predictor-corrector)       |
 | equation of state | ideal gas; (locally) isothermal (`--eos=isothermal`, cs ∝ R^slope) |
-| source terms      | well-balanced curvilinear geometry, uniform + central point-mass gravity, optically thin cooling (exact Townsend), OU turbulence driving |
+| source terms      | well-balanced curvilinear geometry; uniform, central point-mass and **self-gravity** (Poisson/CG); shearing box (+shear-periodic BCs); **FARGO orbital advection**; optically thin cooling (exact Townsend); OU turbulence driving; custom body-force hook |
 | diffusion         | explicit viscosity (full tensor in Cartesian, τ<sub>Rφ</sub> in cylindrical/polar); thermal conduction; passive-scalar diffusion |
 | tracers           | passive scalar fields (`-DCHAA_NSCAL`, bounded, upwinded on the mass flux); Lagrangian tracer particles (`--nParticles`) |
 | boundaries        | `periodic`, `zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`, `inflow-diode`, `userdef` |

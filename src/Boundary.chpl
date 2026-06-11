@@ -9,6 +9,7 @@
  */
 module Boundary {
   use Params, Grid, State, Eos;
+  use Math;
   use Problems;
 
   inline proc isInterior(idx: 3*int): bool {
@@ -64,6 +65,27 @@ module Boundary {
         }
         when BC_PERIODIC {
           V[i,j,k] = V[periodicSrc(side, i, j, k)];
+        }
+        when BC_SHEAR {
+          // shearing-periodic (x1 sides of a Cartesian shearing box):
+          // periodic image, azimuthally offset by the accumulated shear
+          const Lx = x1max - x1min, Ly = x2max - x2min;
+          const vsh = shearQ*omegaRot*Lx;
+          const off = if side == 0 then vsh*t else -vsh*t;
+          const si = if side == 0 then i + nx1 else i - nx1;
+          var yp = x2c(j) + off;
+          yp = x2min + mod(yp - x2min, Ly);
+          // bracketing cells in the (uniform, periodic) x2 direction
+          const tt = (yp - x2c(1))/dx2At(1);
+          var j0 = floor(tt): int;
+          const fr = tt - j0;
+          j0 = mod(j0, nx2) + 1;
+          const j1 = j0 % nx2 + 1;
+          var w: StateVec;
+          for param v in 0..NTOT-1 do
+            w(v) = (1.0 - fr)*V[si, j0, k](v) + fr*V[si, j1, k](v);
+          w(IVX2) += if side == 0 then vsh else -vsh;
+          V[i,j,k] = w;
         }
         when BC_REFLECT, BC_AXIS {
           var w = V[mirrorSrc(side, i, j, k)];

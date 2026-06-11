@@ -29,10 +29,13 @@ module Particles {
   /* fractional face index of coordinate x along dir */
   inline proc faceIndexOf(dir: int, x: real): real {
     if dir == 0 then
-      return lawIndex(gridCode(0), x1min, x1max, nx1, stretchX1, x);
+      return lawIndex(gridCode(0), x1min, x1max, nx1, stretchX1,
+                      stretchUniX1, x);
     if dir == 1 then
-      return lawIndex(gridCode(1), x2min, x2max, nx2, stretchX2, x);
-    return lawIndex(gridCode(2), x3min, x3max, nx3, stretchX3, x);
+      return lawIndex(gridCode(1), x2min, x2max, nx2, stretchX2,
+                      stretchUniX2, x);
+    return lawIndex(gridCode(2), x3min, x3max, nx3, stretchX3,
+                    stretchUniX3, x);
   }
 
   inline proc centerOf(dir: int, q: int): real {

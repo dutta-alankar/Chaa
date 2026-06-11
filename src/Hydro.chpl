@@ -9,8 +9,10 @@
  * uniform, logarithmic and geometrically stretched grids.
  */
 module Hydro {
-  use Params, Grid, State, Eos, Recon, Riemann, Forcing;
+  use Params, Grid, State, Eos, Recon, Riemann, Forcing, SelfGravity;
+  use Problems;
   use Math;
+  import Fargo.wBg;
 
   inline proc dirOffset(dir: int): 3*int {
     if dir == 0 then return (1, 0, 0);
@@ -60,7 +62,19 @@ module Hydro {
       else
         faceStates(V[idx-e-e], V[idx-e], V[idx], V[idx+e],
                    dcAt(dir, idx(dir)), wL, wR);
-      var f = riemannFlux(wL, wR, dir);
+      var f: StateVec;
+      if useFargo && dir == 1 {
+        // FARGO: solve in the frame comoving with the background w(R),
+        // then transform the flux back to total momentum/energy
+        const wf = wBg(idx(0));
+        wL(IVX2) -= wf;
+        wR(IVX2) -= wf;
+        f = riemannFlux(wL, wR, dir);
+        f(IENG) += wf*f(IMX2) + 0.5*wf*wf*f(IRHO);
+        f(IMX2) += wf*f(IRHO);
+      } else {
+        f = riemannFlux(wL, wR, dir);
+      }
       if mu > 0.0 then addViscFlux(idx, dir, f);
       if kappa > 0.0 then addConductionFlux(idx, dir, f);
       if scDiff > 0.0 then addScalarDiffFlux(idx, dir, f);
@@ -164,6 +178,34 @@ module Hydro {
         for param c in 0..2 {
           s(IMX1 + c) += w(IRHO)*g(c);
           s(IENG)     += w(IRHO)*w(IVX1 + c)*g(c);
+        }
+      }
+
+      /* shearing box: Coriolis + tidal sources (Cartesian frame
+         rotating at omegaRot, shear parameter q = shearQ) */
+      if omegaRot > 0.0 && geom == Geom.cartesian {
+        const x = x1c(i);
+        s(IMX1) += w(IRHO)*(2.0*omegaRot*w(IVX2)
+                            + 2.0*shearQ*omegaRot*omegaRot*x);
+        s(IMX2) += -2.0*omegaRot*w(IRHO)*w(IVX1);
+        s(IENG) += w(IRHO)*w(IVX1)*2.0*shearQ*omegaRot*omegaRot*x;
+      }
+
+      /* self-gravity g = -grad(Phi) (Poisson solve, once per step) */
+      if sgFourPiG > 0.0 {
+        const g = sgAccel(i, j, k);
+        for param c in 0..2 {
+          s(IMX1 + c) += w(IRHO)*g(c);
+          s(IENG)     += w(IRHO)*w(IVX1 + c)*g(c);
+        }
+      }
+
+      /* problem-defined body force (custom potentials/forces) */
+      if problemHasBodyForce {
+        const a = problemBodyForce(i, j, k, t);
+        for param c in 0..2 {
+          s(IMX1 + c) += w(IRHO)*a(c);
+          s(IENG)     += w(IRHO)*w(IVX1 + c)*a(c);
         }
       }
 
@@ -288,7 +330,9 @@ module Hydro {
       dlmin = min(dlmin, dl1(i));
     }
     if act2 {
-      dta = min(dta, dl2(i, j)/(abs(w(IVX2)) + cs));
+      // FARGO: only the residual azimuthal velocity limits the step
+      const v2 = if useFargo then w(IVX2) - wBg(i) else w(IVX2);
+      dta = min(dta, dl2(i, j)/(abs(v2) + cs));
       dlmin = min(dlmin, dl2(i, j));
     }
     if act3 {

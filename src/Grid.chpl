@@ -38,17 +38,58 @@ module Grid {
         dx2 = (x2max - x2min)/nx2,
         dx3 = (x3max - x3min)/nx3;
 
+  /* stretched law, forward orientation: a uniform block of nu cells of
+     spacing h at the start, then spacings in geometric progression
+     h*r, h*r^2, ... (continuous across the junction).  nu = 0 gives a
+     pure geometric progression starting from h.  h follows from the
+     total length. */
+  inline proc stretchH(L: real, n: int, nu: int, r: real): real {
+    const ns = n - nu;
+    if nu == 0 then
+      return L*(r - 1.0)/(r**(n:real) - 1.0);
+    return L/(nu + r*(r**(ns:real) - 1.0)/(r - 1.0));
+  }
+
+  inline proc stretchFwd(xmin: real, L: real, n: int, nu: int,
+                         r: real, i: int): real {
+    const h = stretchH(L, n, nu, r);
+    if nu == 0 then
+      return xmin + h*(r**(i - 1.0) - 1.0)/(r - 1.0);
+    if i <= nu + 1 then return xmin + (i - 1.0)*h;
+    return xmin + nu*h + h*r*(r**(i - 1.0 - nu) - 1.0)/(r - 1.0);
+  }
+
+  inline proc stretchFwdIdx(xmin: real, L: real, n: int, nu: int,
+                            r: real, x: real): real {
+    const h = stretchH(L, n, nu, r);
+    if nu == 0 then
+      return 1.0 + log(1.0 + (x - xmin)*(r - 1.0)/h)/log(r);
+    if x <= xmin + nu*h then return 1.0 + (x - xmin)/h;
+    return nu + 1.0
+           + log(1.0 + (x - xmin - nu*h)*(r - 1.0)/(h*r))/log(r);
+  }
+
   /* generic face coordinate under a grid law; face i is the *left*
-     face of cell i, i in 1..n+1 (ghost faces extrapolate the law) */
+     face of cell i, i in 1..n+1 (ghost faces extrapolate the law).
+     stretch: ratio r > 1 grows away from a uniform block of nu cells
+     at the *start*; r < 1 with nu > 0 is the mirror image — spacing
+     shrinks into a uniform block of nu cells at the *end*. */
   inline proc lawFace(code: int, xmin: real, xmax: real, n: int,
-                      r: real, i: int): real {
+                      r: real, nu: int, i: int): real {
     select code {
       when GRID_UNIFORM do return xmin + (i-1.0)*(xmax - xmin)/n;
       when GRID_LOG     do return xmin*(xmax/xmin)**((i-1.0)/n);
       when GRID_LOGDEC  do
         return xmin + xmax - xmin*(xmax/xmin)**((n+1.0-i)/n);
-      when GRID_STRETCH do
-        return xmin + (xmax - xmin)*(r**(i-1.0) - 1.0)/(r**(n:real) - 1.0);
+      when GRID_STRETCH {
+        if abs(r - 1.0) < 1.0e-14 then
+          return xmin + (i-1.0)*(xmax - xmin)/n;
+        if r > 1.0 || nu == 0 then
+          return stretchFwd(xmin, xmax - xmin, n, nu, r, i);
+        // r < 1 with a uniform block: mirror of the 1/r forward law
+        return xmin + xmax
+               - stretchFwd(xmin, xmax - xmin, n, nu, 1.0/r, n + 2 - i);
+      }
       otherwise do return xmin + (i-1.0)*(xmax - xmin)/n;
     }
     return 0.0;
@@ -57,27 +98,36 @@ module Grid {
   /* inverse of the face law: fractional face index of coordinate x
      (used by the tracer particles to locate themselves) */
   inline proc lawIndex(code: int, xmin: real, xmax: real, n: int,
-                       r: real, x: real): real {
+                       r: real, nu: int, x: real): real {
     select code {
       when GRID_UNIFORM do return 1.0 + (x - xmin)*n/(xmax - xmin);
       when GRID_LOG     do
         return 1.0 + n*log(x/xmin)/log(xmax/xmin);
       when GRID_LOGDEC  do
         return (n + 1.0) - n*log((xmin + xmax - x)/xmin)/log(xmax/xmin);
-      when GRID_STRETCH do
-        return 1.0 + log(1.0 + (x - xmin)*(r**(n:real) - 1.0)
-                               /(xmax - xmin))/log(r);
+      when GRID_STRETCH {
+        if abs(r - 1.0) < 1.0e-14 then
+          return 1.0 + (x - xmin)*n/(xmax - xmin);
+        if r > 1.0 || nu == 0 then
+          return stretchFwdIdx(xmin, xmax - xmin, n, nu, r, x);
+        return (n + 2.0)
+               - stretchFwdIdx(xmin, xmax - xmin, n, nu, 1.0/r,
+                               xmin + xmax - x);
+      }
       otherwise do return 1.0 + (x - xmin)*n/(xmax - xmin);
     }
     return 1.0;
   }
 
   inline proc x1f(i: int): real do
-    return lawFace(gridCode(0), x1min, x1max, nx1, stretchX1, i);
+    return lawFace(gridCode(0), x1min, x1max, nx1, stretchX1,
+                   stretchUniX1, i);
   inline proc x2f(j: int): real do
-    return lawFace(gridCode(1), x2min, x2max, nx2, stretchX2, j);
+    return lawFace(gridCode(1), x2min, x2max, nx2, stretchX2,
+                   stretchUniX2, j);
   inline proc x3f(k: int): real do
-    return lawFace(gridCode(2), x3min, x3max, nx3, stretchX3, k);
+    return lawFace(gridCode(2), x3min, x3max, nx3, stretchX3,
+                   stretchUniX3, k);
 
   inline proc x1c(i: int): real do return 0.5*(x1f(i) + x1f(i+1));
   inline proc x2c(j: int): real do return 0.5*(x2f(j) + x2f(j+1));

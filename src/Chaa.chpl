@@ -12,7 +12,7 @@
  */
 module Chaa {
   use Params, Grid, State, Eos, Hydro, Boundary, Problems, Evolve, Output;
-  use Forcing, Particles;
+  use Forcing, Particles, SelfGravity, Fargo;
   use Logo;
   use Time, FileSystem, Math;
 
@@ -47,6 +47,11 @@ module Chaa {
     if coolLambda0 > 0.0 then
       writeln("  cooling    : Lambda0 = ", coolLambda0,
               ", alpha = ", coolAlpha);
+    if sgFourPiG > 0.0 then
+      writeln("  self-grav  : 4 pi G = ", sgFourPiG);
+    if omegaRot > 0.0 then
+      writeln("  shear box  : Omega = ", omegaRot, ", q = ", shearQ);
+    if useFargo then writeln("  fargo      : orbital advection on");
     writeln("  locales    : ", numLocales, "   tasks/locale: ",
             here.maxTaskPar);
     writeln("=========================================================");
@@ -78,6 +83,21 @@ module Chaa {
       halt("log grids in x3 need x3min > 0");
     if forceAmp > 0.0 && geom != Geom.cartesian then
       halt("turbulence forcing is implemented for Cartesian boxes");
+    if (bcCode(0) == BC_SHEAR || bcCode(1) == BC_SHEAR) &&
+       (geom != Geom.cartesian || omegaRot <= 0.0) then
+      halt("shear-periodic boundaries need a Cartesian shearing box " +
+           "(--omegaRot > 0)");
+    if useFargo {
+      if !act2 then halt("fargo needs an active x2 direction");
+      if gridCode(1) != GRID_UNIFORM then
+        halt("fargo needs a uniform x2 grid");
+      if geom == Geom.cartesian && omegaRot <= 0.0 then
+        halt("fargo in Cartesian needs the shearing box (--omegaRot>0)");
+      if geom == Geom.polar && gravCentral <= 0.0 then
+        halt("fargo in polar needs --gravCentral > 0 (Keplerian w)");
+      if geom == Geom.cylindrical || geom == Geom.spherical then
+        halt("fargo is implemented for polar and shearing-box runs");
+    }
     if geom == Geom.spherical && act2 &&
        (x2min < -1.0e-12 || x2max > pi + 1.0e-12) then
       halt("spherical: theta must lie in [0, pi]");
@@ -112,7 +132,13 @@ module Chaa {
     while t < tstop*(1.0 - 1.0e-12) && step < maxSteps {
       dt = min(dt, tstop - t);
       updateForcing(dt);
+      solveGravity();
       advance(dt, t);
+      if useFargo {
+        fargoShift(dt);
+        applyFloorsAndPrims();
+        applyBCs(t + dt);
+      }
       advanceParticles(dt);
       t += dt;
       step += 1;

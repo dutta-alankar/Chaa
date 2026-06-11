@@ -13,18 +13,18 @@ Create `src/problems/Blob.chpl`. A problem module needs one proc,
 ```chapel
 /* Blob.chpl — dense cloud in a supersonic wind. */
 module Blob {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   proc setup() {
     forall (i, j, k) in DInt {
-      const x = x1c(i), y = x2c(j);             // cell-centre coordinates
+      const x = x1c(i), y = x2c(j);              // cell-centre coordinates
       const r = sqrt((x - cen1)**2 + (y - cen2)**2);
-      const inside = r < blastR0;               // reuse an existing knob
-      V[i,j,k] = (if inside then 10.0 else 1.0, // rho
-                  if inside then 0.0 else inVx1, // vx1
-                  0.0, 0.0,                      // vx2, vx3
-                  inPrs);                        // p
+      const inside = r < blastR0;                // reuse an existing knob
+      V[i,j,k] = mkPrim(if inside then 10.0 else 1.0,   // rho
+                        if inside then 0.0 else inVx1,  // vx1
+                        0.0, 0.0,                       // vx2, vx3
+                        inPrs);                         // p
     }
   }
 }
@@ -150,7 +150,39 @@ reusing them keeps the namespace small.
   `--nParticles=N` scatters them uniformly and writes
   `<problem>.particles.NNNN.txt` beside every dump.
 
-## Step 7 — custom boundary conditions (optional)
+## Step 7 — custom forces and potentials (optional)
+
+For an external body force or a static potential, implement an
+acceleration proc in your problem module and register it in the
+`problemBodyForce` dispatcher (`src/Problems.chpl`):
+
+```chapel
+// in src/problems/Blob.chpl
+inline proc accel(i: int, j: int, k: int, t: real): 3*real {
+  // e.g. a softened point-mass potential at (cen1, cen2):
+  const dx = x1c(i) - cen1, dy = x2c(j) - cen2;
+  const ir3 = 1.0/(dx*dx + dy*dy + gravEps**2)**1.5;
+  return (-gravCentral*dx*ir3, -gravCentral*dy*ir3, 0.0);
+}
+```
+
+```chapel
+// in src/Problems.chpl
+const problemHasBodyForce = problem == "blob";
+proc problemBodyForce(i, j, k, t: real): 3*real {
+  select problem {
+    when "blob" do return Blob.accel(i, j, k, t);
+    otherwise do return (0.0, 0.0, 0.0);
+  }
+}
+```
+
+The acceleration is applied with the matching energy source
+ρ v·a in every stage. (For gravity from the *gas itself*, just enable
+`--sgFourPiG`; for a fixed central mass, `--gravCentral` — no code
+needed.)
+
+## Step 8 — custom boundary conditions (optional)
 
 For anything beyond the built-in BC types, set a side to
 `--bcX2min=userdef` and provide a hook. The ghost slab is just a slice
@@ -173,14 +205,14 @@ of the padded domain; see `DoubleMach.chpl` (time-dependent inflow) and
 Register it in `Problems.problemUserBC`. Side ids: 0/1 = x1min/max,
 2/3 = x2min/max, 4/5 = x3min/max.
 
-## Step 8 — internal (immersed) boundaries (optional)
+## Step 9 — internal (immersed) boundaries (optional)
 
 To carve solid objects out of the flow, set `solveMask` in `setup()`
 and re-impose the solid state after every stage with an `internalBC(t)`
 hook — `CylinderFlow.chpl` is a complete example. Masked cells are
 skipped by the update and the time-step computation.
 
-## Step 9 — add a validated test (recommended)
+## Step 10 — add a validated test (recommended)
 
 1. add a line to `tests/cases.conf`:
    ```
@@ -199,5 +231,5 @@ skipped by the update and the time-step computation.
 - [x] `src/problems/myproblem_runtime_params.ini` with the canonical run
 - [ ] simulation-specific knobs in `Cli.chpl` + `Params.chpl` (if needed)
 - [ ] tracer dye / particles (if useful)
-- [ ] `userBC` / `internalBC` hooks (if needed)
+- [ ] `userBC` / `internalBC` / `problemBodyForce` hooks (if needed)
 - [ ] a case line + validator, wired into CI

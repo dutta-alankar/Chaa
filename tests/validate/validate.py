@@ -421,6 +421,111 @@ def vortex_particles(outdir):
     check(dist.mean() < 1.0, "particles return after one period")
 
 
+REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                   "reference")
+
+
+def ref_sod_idefix(outdir):
+    """matched-config Sod vs a frozen Idefix (roe/plm/rk2) profile"""
+    ref = np.loadtxt(os.path.join(REF, "idefix_sod.txt"))
+    d = load_txt(last(outdir, "txt"))
+    for col, rcol, nm, tol in ((1, 1, "rho", 6e-4), (2, 2, "vx", 1.2e-3),
+                               (5, 3, "p", 6e-4)):
+        L1 = np.abs(d[:, col] - ref[:, rcol]).mean()
+        print(f"  L1({nm}) vs idefix = {L1:.3e}")
+        check(L1 < tol, f"L1({nm}) {L1:.2e} < {tol}")
+
+
+def ref_sodiso_idefix(outdir):
+    """isothermal Sod vs frozen Idefix sod-iso"""
+    ref = np.loadtxt(os.path.join(REF, "idefix_sodiso.txt"))
+    d = load_txt(last(outdir, "txt"))
+    L1r = np.abs(d[:, 1] - ref[:, 1]).mean()
+    L1v = np.abs(d[:, 2] - ref[:, 2]).mean()
+    print(f"  L1(rho)={L1r:.3e}  L1(vx)={L1v:.3e}")
+    check(L1r < 8e-4, f"L1(rho) {L1r:.2e} < 8e-4")
+    check(L1v < 2e-3, f"L1(vx) {L1v:.2e} < 2e-3")
+
+
+def ref_machref_idefix(outdir):
+    """double Mach reflection vs frozen Idefix MachReflection fields"""
+    ref = np.loadtxt(os.path.join(REF, "idefix_machref.txt"))
+    h = load_h5(last(outdir, "h5"))
+    rho = h["rho"]                      # (ny, nx)
+    row = np.abs(rho[0, :] - ref[:, 1]).mean() / ref[:, 1].mean()
+    ymean = np.abs(rho.mean(axis=0) - ref[:, 2]).mean() / ref[:, 2].mean()
+    print(f"  rel L1: bottom row {row:.3e}, y-mean {ymean:.3e}")
+    check(row < 0.03, f"bottom-row profile within 3% (got {row*100:.2f}%)")
+    check(ymean < 0.02, f"y-averaged profile within 2% (got {ymean*100:.2f}%)")
+
+
+def ref_sedov3d_idefix(outdir):
+    """3D Sedov radial profile vs frozen Idefix SedovBlastWave"""
+    ref = np.loadtxt(os.path.join(REF, "idefix_sedov3d.txt"))
+    h = load_h5(last(outdir, "h5"))
+    rho = h["rho"].transpose(2, 1, 0)   # -> (i,j,k)
+    n = rho.shape[0]
+    xc = (np.arange(n) + 0.5)/n - 0.5
+    X, Y, Z = np.meshgrid(xc, xc, xc, indexing="ij")
+    r = np.sqrt(X**2 + Y**2 + Z**2).ravel()
+    bins = np.linspace(0, 0.45, 30)
+    ni, _ = np.histogram(r, bins)
+    pc, _ = np.histogram(r, bins, weights=rho.ravel())
+    m = ni > 0
+    prof = pc[m]/ni[m]
+    L1 = np.abs(prof - ref[:, 1]).mean()/ref[:, 1].mean()
+    print(f"  radial-profile rel L1 vs idefix = {L1:.3e}")
+    check(L1 < 2e-3, f"profile within 0.2% (got {L1*100:.3f}%)")
+
+
+def ref_sod_athenapk(outdir):
+    """matched-config Sod (hll/plm/vl2) vs a frozen AthenaPK profile"""
+    ref = np.loadtxt(os.path.join(REF, "athenapk_sod.txt"))
+    d = load_txt(last(outdir, "txt"))
+    for col, rcol, nm, tol in ((1, 1, "rho", 1.2e-3), (2, 2, "vx", 1.5e-3),
+                               (5, 3, "p", 1.2e-3)):
+        L1 = np.abs(d[:, col] - ref[:, rcol]).mean()
+        print(f"  L1({nm}) vs athenapk = {L1:.3e}")
+        check(L1 < tol, f"L1({nm}) {L1:.2e} < {tol}")
+
+
+def epicycle(outdir):
+    """epicyclic oscillation: <vx>(t=pi) = -waveAmp for kappa = Omega"""
+    h = load_h5(last(outdir, "h5"))
+    vx = h["vx1"].mean()
+    print(f"  <vx>(t=pi) = {vx:.5f}  (expected -0.01)")
+    check(np.isfinite(h["rho"]).all(), "all values finite")
+    check(abs(vx + 0.01) < 5e-4, "epicyclic frequency correct to 5%")
+
+
+def selfgrav_kick(outdir):
+    """one Euler step under self-gravity vs the analytic Poisson field"""
+    d = load_txt(last(outdir, "txt"))
+    x, vx = d[:, 0], d[:, 2]
+    A, kw, dt = 0.01, 2*np.pi, 1e-5
+    # rho = 1 - A sin(k(x-x1min)); Phi = A sin(k(x-x1min))/k^2 (4piG=1)
+    g_ana = -A*np.cos(kw*(x + 0.5))/kw
+    err = np.abs(vx - g_ana*dt).max()/np.abs(g_ana*dt).max()
+    print(f"  max rel err vs analytic Poisson acceleration = {err*100:.3f}%")
+    check(err < 0.02, "self-gravity matches the analytic potential to 2%")
+
+
+def sod_stretch_anchor(outdir):
+    """uniform block + geometric-progression stretch, vs exact solution"""
+    d = load_txt(last(outdir, "txt"))
+    x, rho = d[:, 0], d[:, 1]
+    dx = np.diff(x)
+    uni = dx[:98]
+    ratio = (dx[101:]/dx[100:-1]).mean()
+    re, ue, pe = exact_riemann.solution(x, t=0.2)
+    L1 = np.abs(rho - re).mean()
+    print(f"  uniform-block spread {uni.std()/uni.mean():.1e}, "
+          f"GP ratio {ratio:.4f}, L1(rho) {L1:.3e}")
+    check(uni.std()/uni.mean() < 1e-8, "anchor block is uniform")
+    check(abs(ratio - 1.01) < 1e-4, "geometric ratio honoured")
+    check(L1 < 5e-3, f"L1(rho) {L1:.2e} < 5e-3 on the anchored grid")
+
+
 CASES = {
     "sod-1d-cart": sod_1d_cart,
     "sod-1d-exact": sod_1d_exact_rs,
@@ -456,6 +561,16 @@ CASES = {
     "cloud-wind": cloud_wind,
     "turbulence-2d": turbulence_2d,
     "vortex-particles": vortex_particles,
+    "ref-sod-idefix": ref_sod_idefix,
+    "ref-sodiso-idefix": ref_sodiso_idefix,
+    "ref-machref-idefix": ref_machref_idefix,
+    "ref-sedov3d-idefix": ref_sedov3d_idefix,
+    "ref-sod-athenapk": ref_sod_athenapk,
+    "epicycle-shearbox": epicycle,
+    "epicycle-fargo": epicycle,
+    "disk-cavity-fargo": disk_cavity,
+    "selfgrav-kick": selfgrav_kick,
+    "sod-stretch-anchor": sod_stretch_anchor,
 }
 
 if __name__ == "__main__":

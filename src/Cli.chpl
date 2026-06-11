@@ -32,6 +32,9 @@ module Cli {
   config const gridX1 = UNSET_S, gridX2 = UNSET_S, gridX3 = UNSET_S;
   config const stretchX1 = UNSET_R, stretchX2 = UNSET_R,
                stretchX3 = UNSET_R;          // geometric-progression ratio
+  // cells of the uniform block anchoring a stretched direction
+  config const stretchUniX1 = UNSET_I, stretchUniX2 = UNSET_I,
+               stretchUniX3 = UNSET_I;
 
   /* --- physics --- */
   config const gam   = UNSET_R;
@@ -52,6 +55,13 @@ module Cli {
   config const forceSeed = UNSET_I;
   // Lagrangian tracer particles
   config const nParticles = UNSET_I, partSeed = UNSET_I;
+  // self-gravity: 4*pi*G normalisation (>0 enables the Poisson solve)
+  config const sgFourPiG = UNSET_R, sgTol = UNSET_R;
+  config const sgMaxIter = UNSET_I;
+  // shearing box (Omega > 0 enables the rotating-frame source terms)
+  config const omegaRot = UNSET_R, shearQ = UNSET_R;
+  // FARGO orbital advection
+  config const fargo = UNSET_S;
 
   /* --- numerics --- */
   config const cfl = UNSET_R, cflVisc = UNSET_R;

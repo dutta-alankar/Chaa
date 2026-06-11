@@ -1,5 +1,11 @@
 # Test suite
 
+!!! tip
+    For per-problem physics descriptions and measured results see
+    [Test problems in detail](test-problems.md); for the frozen
+    Idefix/AthenaPK comparisons see
+    [Cross-code validation](cross-validation.md).
+
 Every case below runs in CI on each push (and locally via
 `ctest --test-dir build` or `tests/run_case.sh <case>|all`), and is
 validated **quantitatively** — against exact solutions, similarity
@@ -62,6 +68,17 @@ scalings, analytic steady states or strict symmetry requirements.
 | `cloud-wind` | wind-cloud problem: tracer dye bounded, diode boundaries, dense core survives |
 | `turbulence-2d` | OU spectral driving to v_rms ≈ 1, dye mixing |
 | `vortex-particles` | Lagrangian tracers return to their start after one vortex period |
+
+## Cross-code references & new physics
+
+| case | what it validates |
+|---|---|
+| `ref-sod-idefix`, `ref-sodiso-idefix`, `ref-machref-idefix`, `ref-sedov3d-idefix` | matched-configuration agreement with frozen Idefix profiles (L1 down to 2.7×10⁻⁴) |
+| `ref-sod-athenapk` | matched-configuration agreement with a frozen AthenaPK profile |
+| `epicycle-shearbox`, `epicycle-fargo` | shearing-box sources + shear-periodic BCs: epicyclic frequency to 5 digits, with and without FARGO |
+| `disk-cavity-fargo` | FARGO orbital advection preserves the disk equilibrium |
+| `selfgrav-kick` | Poisson self-gravity vs the analytic potential (0.08 %) |
+| `sod-stretch-anchor` | uniform-anchor stretched grid: block uniform to round-off, exact GP ratio, exact-solution L1 |
 
 ## Running locally
 

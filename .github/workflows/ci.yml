@@ -95,6 +95,16 @@ jobs:
           - cloud-wind
           - turbulence-2d
           - vortex-particles
+          - ref-sod-idefix
+          - ref-sodiso-idefix
+          - ref-machref-idefix
+          - ref-sedov3d-idefix
+          - ref-sod-athenapk
+          - epicycle-shearbox
+          - epicycle-fargo
+          - disk-cavity-fargo
+          - selfgrav-kick
+          - sod-stretch-anchor
     steps:
       - uses: actions/checkout@v4
       - name: install runtime deps

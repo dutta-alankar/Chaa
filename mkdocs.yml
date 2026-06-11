@@ -50,12 +50,19 @@ nav:
   - Tutorial: tutorial.md
   - User guide:
       - Configuration: user-guide/configuration.md
+      - The grid: user-guide/grid.md
       - Equations & geometry: user-guide/equations.md
+      - Physics modules: user-guide/physics.md
       - Numerical schemes: user-guide/numerics.md
+      - Boundary conditions: user-guide/boundaries.md
+      - Tracer particles: user-guide/particles.md
       - Output & visualisation: user-guide/output.md
       - Running in parallel: user-guide/parallel.md
   - Set up your own problem: custom-problem.md
   - Architecture & code flow: architecture.md
-  - Test suite: tests.md
+  - Tests:
+      - Test suite overview: tests.md
+      - Test problems in detail: test-problems.md
+      - Cross-code validation: cross-validation.md
   - Idefix HD tests in Chaa: idefix.md
   - AthenaPK features in Chaa: athenapk.md

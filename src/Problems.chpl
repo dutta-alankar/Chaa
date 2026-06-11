@@ -13,7 +13,7 @@ module Problems {
   import Sod, TwoBlast, Sedov, Blast, Riemann2D, DoubleMach,
          KelvinHelmholtz, RayleighTaylor, IsentropicVortex,
          TaylorCouette, CylinderFlow, KhIdefix, DiskCavity, ThermalWave,
-         Cloud, LinearWave, Turbulence;
+         Cloud, LinearWave, Turbulence, Epicycle;
 
   proc problemInit() {
     select problem {
@@ -34,6 +34,7 @@ module Problems {
       when "cloud"         do Cloud.setup();
       when "linearWave"    do LinearWave.setup();
       when "turbulence"    do Turbulence.setup();
+      when "epicycle"      do Epicycle.setup();
       otherwise do halt("unknown problem: " + problem);
     }
   }
@@ -45,6 +46,16 @@ module Problems {
       otherwise do halt("problem " + problem +
                         " does not define user boundary conditions");
     }
+  }
+
+  /* optional problem-defined body force (acceleration); register a
+     problem here and return its acceleration vector — see the docs'
+     custom-problem guide for a worked example */
+  const problemHasBodyForce = false;     // || problem == "myproblem"
+
+  proc problemBodyForce(i: int, j: int, k: int, t: real): 3*real {
+    // select problem { when "myproblem" do return MyProblem.accel(i,j,k,t); }
+    return (0.0, 0.0, 0.0);
   }
 
   proc problemInternalBC(t: real) {

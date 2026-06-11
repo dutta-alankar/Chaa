@@ -61,6 +61,11 @@ module Params {
   const stretchX1 = valR(Cli.stretchX1, "stretchX1", 1.05),
         stretchX2 = valR(Cli.stretchX2, "stretchX2", 1.05),
         stretchX3 = valR(Cli.stretchX3, "stretchX3", 1.05);
+  // size of the uniform block anchoring a stretched direction:
+  // ratio > 1 puts it at the start (fine end), ratio < 1 at the end
+  const stretchUniX1 = valI(Cli.stretchUniX1, "stretchUniX1", 0),
+        stretchUniX2 = valI(Cli.stretchUniX2, "stretchUniX2", 0),
+        stretchUniX3 = valI(Cli.stretchUniX3, "stretchUniX3", 0);
 
   /* --- physics --- */
   const gam      = valR(Cli.gam, "gam", 1.4);       // adiabatic index
@@ -90,6 +95,16 @@ module Params {
   // Lagrangian tracer particles
   const nParticles = valI(Cli.nParticles, "nParticles", 0);
   const partSeed   = valI(Cli.partSeed, "partSeed", 4321);
+  // self-gravity (Poisson: lap(Phi) = sgFourPiG * rho)
+  const sgFourPiG = valR(Cli.sgFourPiG, "sgFourPiG", 0.0);
+  const sgTol     = valR(Cli.sgTol, "sgTol", 1.0e-8);
+  const sgMaxIter = valI(Cli.sgMaxIter, "sgMaxIter", 10000);
+  // shearing box
+  const omegaRot = valR(Cli.omegaRot, "omegaRot", 0.0);
+  const shearQ   = valR(Cli.shearQ, "shearQ", 1.5);
+  // FARGO orbital advection (off | on)
+  const fargo = valS(Cli.fargo, "fargo", "off");
+  const useFargo = fargo == "on";
 
   /* --- numerics --- */
   const cfl        = valR(Cli.cfl, "cfl", 0.4);
@@ -204,7 +219,8 @@ module Params {
   param EOS_IDEAL = 0, EOS_ISO = 1;
   param GRID_UNIFORM = 0, GRID_LOG = 1, GRID_LOGDEC = 2, GRID_STRETCH = 3;
   param BC_PERIODIC = 0, BC_ZEROGRAD = 1, BC_REFLECT = 2, BC_AXIS = 3,
-        BC_INFLOW = 4, BC_USERDEF = 5, BC_OUT_DIODE = 6, BC_IN_DIODE = 7;
+        BC_INFLOW = 4, BC_USERDEF = 5, BC_OUT_DIODE = 6, BC_IN_DIODE = 7,
+        BC_SHEAR = 8;
 
   const eosCode = parseOpt(eos, ("ideal", "isothermal"));
   const reconCode = parseOpt(recon,
@@ -246,6 +262,7 @@ module Params {
       when "outflow-diode" do return BC_OUT_DIODE; // zero-grad, no inflow
       when "inflow-diode"  do return BC_IN_DIODE;  // zero-grad, no outflow
       when "userdef"       do return BC_USERDEF;
+      when "shear-periodic" do return BC_SHEAR;   // shearing box, x1 only
       otherwise do halt("unknown boundary condition: " + s);
     }
   }
