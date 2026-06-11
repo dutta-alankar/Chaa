@@ -5,14 +5,14 @@
  * Run with --eos=isothermal --csIso=10.
  */
 module KhIdefix {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   proc setup() {
     forall (i, j, k) in DInt {
       const x = x1c(i), y = x2c(j);
       const yInt = 0.5*(1.0 + 0.05*(sin(0.5*pi*x) + cos(4.0*pi*x)));
-      V[i,j,k] = (1.0, if y > yInt then 1.0 else -1.0, 0.0, 0.0, 1.0);
+      V[i,j,k] = mkPrim(1.0, if y > yInt then 1.0 else -1.0, 0.0, 0.0, 1.0);
     }
   }
 }

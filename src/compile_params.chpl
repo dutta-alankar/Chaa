@@ -13,4 +13,8 @@ module CompileParams {
 
   /* compile in the HDF5 writer (links against -lhdf5) */
   config param hdf5Enabled = false;
+
+  /* number of passive tracer (scalar colour) fields advected with the
+     flow; they ride in the state vector after the five hydro slots */
+  config param NSCAL = 1;
 }

@@ -87,6 +87,14 @@ jobs:
           - sedov-3d-idefix
           - vortex-limo3
           - vortex-ppm
+          - sod-1d-stretch
+          - sedov-1d-log
+          - sod-from-ini
+          - cooling-box
+          - linear-wave
+          - cloud-wind
+          - turbulence-2d
+          - vortex-particles
     steps:
       - uses: actions/checkout@v4
       - name: install runtime deps

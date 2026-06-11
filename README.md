@@ -101,18 +101,24 @@ code is built around.
 
 | ingredient        | options                                                          |
 |-------------------|------------------------------------------------------------------|
-| reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`), `limo3` (Čada & Torrilhon), `ppm` (Colella & Sekora / Peterson & Hammett) |
+| grids             | uniform, logarithmic (`log`, `log-dec`) and geometrically stretched (`stretch`) laws per direction, closed-form metrics |
+| reconstruction    | piecewise constant, piecewise linear (`minmod`, `vanleer`, `mc`), `limo3` (Čada & Torrilhon), `ppm` (Colella & Sekora / Peterson & Hammett), `wenoz` (Borges et al.) |
 | Riemann solver    | Rusanov (`llf`), `hll`, `hllc`, `exact` (iterative Godunov)      |
-| time integration  | `euler`, SSP `rk2`, SSP `rk3`                                    |
+| time integration  | `euler`, SSP `rk2`, SSP `rk3`, `vl2` (predictor-corrector)       |
 | equation of state | ideal gas; (locally) isothermal (`--eos=isothermal`, cs ∝ R^slope) |
-| source terms      | well-balanced curvilinear geometry, uniform gravity, central point-mass gravity |
-| diffusion         | explicit viscosity (full tensor in Cartesian, τ<sub>Rφ</sub> in cylindrical/polar); explicit thermal conduction |
+| source terms      | well-balanced curvilinear geometry, uniform + central point-mass gravity, optically thin cooling (exact Townsend), OU turbulence driving |
+| diffusion         | explicit viscosity (full tensor in Cartesian, τ<sub>Rφ</sub> in cylindrical/polar); thermal conduction; passive-scalar diffusion |
+| tracers           | passive scalar fields (`-DCHAA_NSCAL`, bounded, upwinded on the mass flux); Lagrangian tracer particles (`--nParticles`) |
+| boundaries        | `periodic`, `zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`, `inflow-diode`, `userdef` |
 | positivity        | density/pressure floors, per-face reconstruction fallbacks       |
 
-The `limo3`/`ppm` reconstructions and the RK family mirror
-[Idefix](https://github.com/idefix-code/idefix)'s scheme set, and the test
-suite recreates the Idefix HD tests — see the
-[mapping page](https://dutta-alankar.github.io/Chaa/idefix/). On the
+The `limo3`/`ppm` reconstructions, RK family and grid laws mirror
+[Idefix](https://github.com/idefix-code/idefix)'s scheme set; `wenoz`,
+`vl2`, tracers, particles, cooling and the turbulence driver follow
+[AthenaPK](https://github.com/parthenon-hpc-lab/athenapk) (hydro only —
+see the docs for the [Idefix](https://dutta-alankar.github.io/Chaa/idefix/)
+and [AthenaPK](https://dutta-alankar.github.io/Chaa/athenapk/) mapping
+pages, including why SMR/AMR is explicitly out of scope). On the
 isentropic-vortex accuracy test (64², one period): L1(ρ) = 2.1e-3
 (`linear`) → 9.5e-4 (`limo3`) → 2.2e-4 (`ppm`+`rk3`).
 
@@ -172,8 +178,11 @@ any key can still be overridden per-run on the command line:
                  --nx1=256 --nx2=256 --nx3=256
 ```
 
-Boundary conditions per side (`--bcX1min=…` etc.): `periodic`, `outflow`,
-`reflect`, `axis`, `inflow`, `userdef`.
+Boundary conditions per side (`--bcX1min=…` etc.): `periodic`,
+`zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`,
+`inflow-diode`, `userdef`. Per-problem parameter files live in
+`src/problems/<problem>_runtime_params.ini`:
+`./build/bin/chaa --paramsFile=src/problems/cloud_runtime_params.ini`.
 
 ### Output formats (`--outFormats=`)
 
@@ -215,6 +224,13 @@ suite) are built in, validated quantitatively in CI on every push:
 | `disk-cavity` | Keplerian disk + cavity (Idefix RWI-cavity profile) | 2D polar | rotational equilibrium < 2 % drift |
 | `sedov-3d-idefix` | Sedov, γ=5/3 (Idefix) | 3D Cartesian | radius vs similarity solution |
 | `vortex-limo3`, `vortex-ppm` | vortex accuracy with Idefix schemes | 2D Cartesian | L1 thresholds (9.5e-4 / 2.2e-4) |
+| `sod-1d-stretch`, `sedov-1d-log` | non-uniform grid laws | 1D | exact-solution L1 / similarity radius on stretched & log grids |
+| `sod-from-ini` | per-problem parameter files | 1D | config from `src/problems/sod_runtime_params.ini`; tracer dye rides the contact |
+| `cooling-box` | optically thin cooling | 0D/1D | matches the **exact Townsend integration** to round-off |
+| `linear-wave` | acoustic eigenmode (`wenoz`+`vl2`) | 1D | error 3e-4 of the amplitude after one period |
+| `cloud-wind` | AthenaPK cloud-in-wind | 2D | bounded tracer dye, diode BCs, surviving core |
+| `turbulence-2d` | OU-driven turbulence | 2D | v_rms target, dye mixing |
+| `vortex-particles` | Lagrangian tracers | 2D | particles return after one period |
 
 Run them locally:
 

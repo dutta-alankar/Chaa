@@ -50,6 +50,19 @@ scalings, analytic steady states or strict symmetry requirements.
 | `cylinder-flow` | viscous flow past an immersed cylinder | exact no-slip solid, wake deficit |
 | `disk-cavity` | locally isothermal Keplerian disk with a cavity (Idefix `RWI-cavity` profile) | rotational equilibrium drift < 2 % over 10 t.u., v_φ Keplerian to 3 % |
 
+## Grids, tracers and AthenaPK-derived features
+
+| case | what it validates |
+|---|---|
+| `sod-1d-stretch` | Sod vs the exact solution on a geometrically stretched grid (5× spacing range) |
+| `sedov-1d-log` | Sedov radius on a logarithmic radial grid (100× spacing range), err < 3 % |
+| `sod-from-ini` | the per-problem `*_runtime_params.ini` mechanism + tracer dye riding the contact, bounded in [0,1] |
+| `cooling-box` | power-law cooling vs the **exact Townsend integration** (matches to round-off) |
+| `linear-wave` | acoustic eigenmode over one period with `wenoz` + `vl2` (error 3×10⁻⁴ of the amplitude) |
+| `cloud-wind` | wind-cloud problem: tracer dye bounded, diode boundaries, dense core survives |
+| `turbulence-2d` | OU spectral driving to v_rms ≈ 1, dye mixing |
+| `vortex-particles` | Lagrangian tracers return to their start after one vortex period |
+
 ## Running locally
 
 ```sh

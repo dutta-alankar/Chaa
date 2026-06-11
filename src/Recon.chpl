@@ -69,7 +69,7 @@ module Recon {
         wR = wc;
       }
       when RECON_LINEAR {
-        for param v in 0..NVAR-1 {
+        for param v in 0..NTOT-1 {
           wL(v) = wm(v) + 0.5*limitedSlope(wmm(v), wm(v), wc(v));
           wR(v) = wc(v) - 0.5*limitedSlope(wm(v),  wc(v), wp(v));
         }
@@ -77,7 +77,7 @@ module Recon {
         if wR(IRHO) <= 0.0 || wR(IPRS) <= 0.0 then wR = wc;
       }
       when RECON_LIMO3 {
-        for param v in 0..NVAR-1 {
+        for param v in 0..NTOT-1 {
           var dvm = wm(v) - wmm(v);
           var dvp = wc(v) - wm(v);
           wL(v) = wm(v) + 0.5*dvp*limO3Lim(dvp, dvm, dx);
@@ -157,16 +157,47 @@ module Recon {
     }
   }
 
-  /* face L/R states for ppm; needs cells idx-3..idx+2 along the sweep */
-  inline proc faceStatesPPM(wm3: StateVec, wmm: StateVec, wm: StateVec,
-                            wc: StateVec, wp: StateVec, wpp: StateVec,
-                            out wL: StateVec, out wR: StateVec) {
-    for param v in 0..NVAR-1 {
-      var dum, vlm, vrm: real;
-      ppmStates(wm3(v), wmm(v), wm(v), wc(v), wp(v), vlm, vrm);
-      wL(v) = vrm;                       // right face of cell m
-      ppmStates(wmm(v), wm(v), wc(v), wp(v), wpp(v), vlm, dum);
-      wR(v) = vlm;                       // left face of cell c
+  /* ----------------------------- WENO-Z ----------------------------- */
+
+  /* fifth-order WENO-Z (Borges et al. 2008) right-face value of the
+     centre cell of the 5-point stencil */
+  inline proc wenozFace(vm2: real, vm1: real, v0: real,
+                        vp1: real, vp2: real): real {
+    param eps = 1.0e-40;
+    const b0 = 13.0/12.0*(vm2 - 2.0*vm1 + v0)**2
+             + 0.25*(vm2 - 4.0*vm1 + 3.0*v0)**2;
+    const b1 = 13.0/12.0*(vm1 - 2.0*v0 + vp1)**2 + 0.25*(vm1 - vp1)**2;
+    const b2 = 13.0/12.0*(v0 - 2.0*vp1 + vp2)**2
+             + 0.25*(3.0*v0 - 4.0*vp1 + vp2)**2;
+    const tau5 = abs(b0 - b2);
+    const a0 = 0.1*(1.0 + tau5/(b0 + eps));
+    const a1 = 0.6*(1.0 + tau5/(b1 + eps));
+    const a2 = 0.3*(1.0 + tau5/(b2 + eps));
+    const q0 = (2.0*vm2 - 7.0*vm1 + 11.0*v0)/6.0;
+    const q1 = (-vm1 + 5.0*v0 + 2.0*vp1)/6.0;
+    const q2 = (2.0*v0 + 5.0*vp1 - vp2)/6.0;
+    return (a0*q0 + a1*q1 + a2*q2)/(a0 + a1 + a2);
+  }
+
+  /* face L/R states for the 5-cell schemes (ppm, wenoz); needs cells
+     idx-3..idx+2 along the sweep (NG >= 3) */
+  inline proc faceStates6(wm3: StateVec, wmm: StateVec, wm: StateVec,
+                          wc: StateVec, wp: StateVec, wpp: StateVec,
+                          out wL: StateVec, out wR: StateVec) {
+    if reconCode == RECON_PPM {
+      for param v in 0..NTOT-1 {
+        var dum, vlm, vrm: real;
+        ppmStates(wm3(v), wmm(v), wm(v), wc(v), wp(v), vlm, vrm);
+        wL(v) = vrm;                       // right face of cell m
+        ppmStates(wmm(v), wm(v), wc(v), wp(v), wpp(v), vlm, dum);
+        wR(v) = vlm;                       // left face of cell c
+      }
+    } else {                               // wenoz
+      for param v in 0..NTOT-1 {
+        wL(v) = wenozFace(wm3(v), wmm(v), wm(v), wc(v), wp(v));
+        // mirrored stencil for the right state
+        wR(v) = wenozFace(wpp(v), wp(v), wc(v), wm(v), wmm(v));
+      }
     }
     if wL(IRHO) <= 0.0 || wL(IPRS) <= 0.0 then wL = wm;
     if wR(IRHO) <= 0.0 || wR(IPRS) <= 0.0 then wR = wc;

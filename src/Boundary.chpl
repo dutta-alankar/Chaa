@@ -45,8 +45,22 @@ module Boundary {
 
     forall (i, j, k) in Dg {
       select code {
-        when BC_OUTFLOW {
+        when BC_ZEROGRAD {
           V[i,j,k] = V[clampInt(side, i, j, k)];
+        }
+        when BC_OUT_DIODE {
+          // zero-gradient, but never let material flow back in
+          var w = V[clampInt(side, i, j, k)];
+          if side % 2 == 0 then w(nv) = min(w(nv), 0.0);
+                           else w(nv) = max(w(nv), 0.0);
+          V[i,j,k] = w;
+        }
+        when BC_IN_DIODE {
+          // zero-gradient, but never let material flow out
+          var w = V[clampInt(side, i, j, k)];
+          if side % 2 == 0 then w(nv) = max(w(nv), 0.0);
+                           else w(nv) = min(w(nv), 0.0);
+          V[i,j,k] = w;
         }
         when BC_PERIODIC {
           V[i,j,k] = V[periodicSrc(side, i, j, k)];
@@ -58,7 +72,7 @@ module Boundary {
           V[i,j,k] = w;
         }
         when BC_INFLOW {
-          V[i,j,k] = (inRho, inVx1, inVx2, inVx3, inPrs);
+          V[i,j,k] = mkPrim(inRho, inVx1, inVx2, inVx3, inPrs);
         }
         otherwise { }
       }

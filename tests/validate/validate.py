@@ -322,6 +322,105 @@ def cylinder_flow(outdir):
     check("RECTILINEAR_GRID" in "".join(head), "rectilinear VTK dataset")
 
 
+def sod_1d_stretch(outdir):
+    """Sod on a geometrically stretched grid (cell sizes ~5x range)"""
+    d = load_txt(last(outdir, "txt"))
+    x, rho = d[:, 0], d[:, 1]
+    dx = np.diff(x)
+    re, ue, pe = exact_riemann.solution(x, t=0.2)
+    L1 = np.abs(rho - re).mean()
+    print(f"  stretch ratio {dx[-1]/dx[0]:.2f}, L1(rho) {L1:.3e}")
+    check(dx[-1]/dx[0] > 3.0, "grid is actually stretched")
+    check(L1 < 0.005, f"L1(rho)={L1:.2e} < 5e-3 on the stretched grid")
+
+
+def sedov_1d_log(outdir):
+    """Sedov on a logarithmic radial grid"""
+    d = load_txt(last(outdir, "txt"))
+    r, rho = d[:, 0], d[:, 1]
+    dr = np.diff(r)
+    rad, ana = r[rho.argmax()], sedov_radius(0.5)
+    err = abs(rad - ana) / ana
+    print(f"  dr range {dr[-1]/dr[0]:.0f}x, radius {rad:.4f} vs {ana:.4f} "
+          f"({err*100:.2f}%)")
+    check(dr[-1]/dr[0] > 20.0, "grid is logarithmic")
+    check(err < 0.03, f"radius error {err*100:.2f}% < 3% on the log grid")
+
+
+def sod_from_ini(outdir):
+    """run configured by src/problems/sod_runtime_params.ini"""
+    d = load_txt(last(outdir, "txt"))
+    x, rho = d[:, 0], d[:, 1]
+    re, ue, pe = exact_riemann.solution(x, t=0.2)
+    check(len(x) == 400, "resolution came from the problem ini file")
+    check(np.abs(rho - re).mean() < 0.012, "L1(rho) vs exact solution")
+    sc = d[:, 6]
+    check(-1e-6 <= sc.min() and sc.max() <= 1.0 + 1e-6,
+          f"tracer bounded [{sc.min():.2e},{sc.max():.6f}]")
+    # dye edge rides the contact discontinuity
+    edge = x[np.abs(np.diff(sc)).argmax()]
+    check(abs(edge - 0.685) < 0.02, f"tracer edge at contact ({edge:.3f})")
+
+
+def cooling_box(outdir):
+    """static box, power-law cooling vs the exact Townsend integration"""
+    d = load_txt(last(outdir, "txt"))
+    T = (d[:, 5] / d[:, 1]).mean()
+    a, g, L0, t = 0.5, 1.4, 0.1, 2.0
+    Tana = (1.0 - (1 - a) * (g - 1) * L0 * t) ** (1 / (1 - a))
+    err = abs(T - Tana) / Tana
+    print(f"  T = {T:.6f}, analytic {Tana:.6f} ({err*100:.4f}%)")
+    check(err < 1e-3, "exact Townsend integration matches analytic")
+    check(np.abs(d[:, 2]).max() < 1e-10, "box stays static")
+
+
+def linear_wave(outdir):
+    """acoustic eigenmode, one period with wenoz + vl2"""
+    d0 = load_txt(sorted(glob.glob(os.path.join(outdir, "*.txt")))[0])
+    d1 = load_txt(last(outdir, "txt"))
+    A = 1.0e-4
+    L1 = np.abs(d1[:, 1] - d0[:, 1]).mean() / A
+    print(f"  L1(rho)/A after one period: {L1:.4f}")
+    check(L1 < 0.02, f"wave preserved to {L1*100:.2f}% of its amplitude")
+
+
+def cloud_wind(outdir):
+    """wind-cloud interaction with tracer dye and diode boundaries"""
+    h0 = load_h5(sorted(glob.glob(os.path.join(outdir, "*.h5")))[0])
+    h = load_h5(last(outdir, "h5"))
+    sc, rho = h["sc0"], h["rho"]
+    print(f"  sc0 in [{sc.min():.4f},{sc.max():.4f}], rho max {rho.max():.2f}")
+    check(np.isfinite(rho).all(), "all values finite")
+    check(sc.min() > -1e-3 and sc.max() < 1.0 + 1e-3, "tracer bounded")
+    check((sc > 0.1).sum() > 100, "dyed cloud material present")
+    check(rho.max() > 3.0, "cloud core still dense")
+
+
+def turbulence_2d(outdir):
+    """OU-driven isothermal turbulence"""
+    h = load_h5(last(outdir, "h5"))
+    vrms = np.sqrt((h["vx1"] ** 2 + h["vx2"] ** 2).mean())
+    sc = h["sc0"]
+    print(f"  v_rms = {vrms:.3f}, dye std {sc.std():.3f} (init 0.5)")
+    check(np.isfinite(h["rho"]).all(), "all values finite")
+    check(0.3 < vrms < 2.5, f"turbulence driven to v_rms={vrms:.2f}")
+    check(sc.std() < 0.4, "tracer dye is mixing")
+    check(-0.05 < sc.min() and sc.max() < 1.05, "tracer bounded")
+
+
+def vortex_particles(outdir):
+    """Lagrangian tracers return to their start after one vortex period"""
+    pf = sorted(glob.glob(os.path.join(outdir, "*.particles.*.txt")))
+    p0 = np.loadtxt(pf[0])
+    p1 = np.loadtxt(pf[-1])
+    d = np.abs(p1[:, 1:3] - p0[:, 1:3])
+    d = np.minimum(d, 10.0 - d)          # periodic distance
+    dist = np.sqrt((d ** 2).sum(axis=1))
+    print(f"  mean periodic return distance {dist.mean():.3f} (domain 10)")
+    check(len(p0) == 64, "all particles present")
+    check(dist.mean() < 1.0, "particles return after one period")
+
+
 CASES = {
     "sod-1d-cart": sod_1d_cart,
     "sod-1d-exact": sod_1d_exact_rs,
@@ -349,6 +448,14 @@ CASES = {
     "sedov-3d-idefix": sedov_3d_idefix,
     "vortex-limo3": vortex_limo3,
     "vortex-ppm": vortex_ppm,
+    "sod-1d-stretch": sod_1d_stretch,
+    "sedov-1d-log": sedov_1d_log,
+    "sod-from-ini": sod_from_ini,
+    "cooling-box": cooling_box,
+    "linear-wave": linear_wave,
+    "cloud-wind": cloud_wind,
+    "turbulence-2d": turbulence_2d,
+    "vortex-particles": vortex_particles,
 }
 
 if __name__ == "__main__":

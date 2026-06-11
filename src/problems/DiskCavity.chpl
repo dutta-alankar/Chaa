@@ -8,7 +8,7 @@
  * Run in polar geometry with --gravCentral=1 --eos=isothermal.
  */
 module DiskCavity {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   inline proc rhoProf(R: real): real do
@@ -26,7 +26,7 @@ module DiskCavity {
       const dpdR = (prsProf(R + dR) - prsProf(R - dR))/(2.0*dR);
       const vphi2 = gravCentral/R + R*dpdR/rho;
       const vphi = sqrt(max(vphi2, 0.0));
-      V[i,j,k] = (rho, 0.0, vphi, 0.0, rho*diskH0*diskH0/R);
+      V[i,j,k] = mkPrim(rho, 0.0, vphi, 0.0, rho*diskH0*diskH0/R);
     }
   }
 }

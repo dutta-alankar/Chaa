@@ -4,7 +4,7 @@
  * Parameters: rtRho{Top,Bot}, rtPrs0, rtPert.
  */
 module RayleighTaylor {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   proc setup() {
@@ -16,7 +16,7 @@ module RayleighTaylor {
       const Lx = x1max - x1min, Ly = x2max - x2min;
       const vy = rtPert*0.25*(1.0 + cos(2.0*pi*x/Lx))
                           *(1.0 + cos(2.0*pi*y/Ly));
-      V[i,j,k] = (rho, 0.0, vy, 0.0, p);
+      V[i,j,k] = mkPrim(rho, 0.0, vy, 0.0, p);
     }
   }
 }

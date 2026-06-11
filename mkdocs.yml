@@ -55,5 +55,7 @@ nav:
       - Output & visualisation: user-guide/output.md
       - Running in parallel: user-guide/parallel.md
   - Set up your own problem: custom-problem.md
+  - Architecture & code flow: architecture.md
   - Test suite: tests.md
   - Idefix HD tests in Chaa: idefix.md
+  - AthenaPK features in Chaa: athenapk.md

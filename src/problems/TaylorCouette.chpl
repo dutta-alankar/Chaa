@@ -5,14 +5,14 @@
  * Parameters: tcOmega{In,Out} (wall angular velocities), inRho, inPrs.
  */
 module TaylorCouette {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
 
   proc setup() {
     const R1 = x1min, R2 = x1max;
     forall (i, j, k) in DInt {
       const R = x1c(i);
       const om = tcOmegaIn + (tcOmegaOut - tcOmegaIn)*(R - R1)/(R2 - R1);
-      V[i,j,k] = (inRho, 0.0, 0.0, om*R, inPrs);
+      V[i,j,k] = mkPrim(inRho, 0.0, 0.0, om*R, inPrs);
     }
   }
 

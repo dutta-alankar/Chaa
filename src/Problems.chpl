@@ -12,7 +12,8 @@ module Problems {
   use Params;
   import Sod, TwoBlast, Sedov, Blast, Riemann2D, DoubleMach,
          KelvinHelmholtz, RayleighTaylor, IsentropicVortex,
-         TaylorCouette, CylinderFlow, KhIdefix, DiskCavity, ThermalWave;
+         TaylorCouette, CylinderFlow, KhIdefix, DiskCavity, ThermalWave,
+         Cloud, LinearWave, Turbulence;
 
   proc problemInit() {
     select problem {
@@ -30,6 +31,9 @@ module Problems {
       when "khi"           do KhIdefix.setup();
       when "diskCavity"    do DiskCavity.setup();
       when "thermalWave"   do ThermalWave.setup();
+      when "cloud"         do Cloud.setup();
+      when "linearWave"    do LinearWave.setup();
+      when "turbulence"    do Turbulence.setup();
       otherwise do halt("unknown problem: " + problem);
     }
   }

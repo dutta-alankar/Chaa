@@ -12,6 +12,7 @@
  */
 module Chaa {
   use Params, Grid, State, Eos, Hydro, Boundary, Problems, Evolve, Output;
+  use Forcing, Particles;
   use Logo;
   use Time, FileSystem, Math;
 
@@ -23,9 +24,14 @@ module Chaa {
     writeln("=============================================================");
     writeln("  problem    : ", problem);
     writeln("  geometry   : ", geometry, "  (", ndim, "D)");
-    writeln("  grid       : ", nx1, " x ", nx2, " x ", nx3);
+    writeln("  grid       : ", nx1, " x ", nx2, " x ", nx3,
+            "   (", gridX1, ", ", gridX2, ", ", gridX3, ")");
     writeln("  domain     : [", x1min, ",", x1max, "] x [",
             x2min, ",", x2max, "] x [", x3min, ",", x3max, "]");
+    if NTOT > NVAR then writeln("  tracers    : ", NTOT - NVAR,
+                                " passive scalar field(s)");
+    if nParticles > 0 then writeln("  particles  : ", nParticles,
+                                   " Lagrangian tracers");
     writeln("  solver     : ", riemann, " / ", recon, " (", limiter,
             ") / ", integrator);
     if eosCode == EOS_ISO then
@@ -36,7 +42,11 @@ module Chaa {
     writeln("  cfl        : ", cfl);
     if mu > 0.0 then writeln("  viscosity  : mu = ", mu);
     if kappa > 0.0 then writeln("  conduction : kappa = ", kappa);
+    if scDiff > 0.0 then writeln("  scalar diff: D = ", scDiff);
     if gravCentral > 0.0 then writeln("  gravity    : GM = ", gravCentral);
+    if coolLambda0 > 0.0 then
+      writeln("  cooling    : Lambda0 = ", coolLambda0,
+              ", alpha = ", coolAlpha);
     writeln("  locales    : ", numLocales, "   tasks/locale: ",
             here.maxTaskPar);
     writeln("=========================================================");
@@ -50,11 +60,24 @@ module Chaa {
            "use geometry=polar for (R,phi,z)");
     if mu > 0.0 && geom == Geom.spherical then
       halt("viscosity is not implemented in spherical coordinates");
-    if reconCode == RECON_PPM && ng1 < 3 then
-      halt("ppm reconstruction needs 3 ghost layers: " +
+    if (reconCode == RECON_PPM || reconCode == RECON_WENOZ) && ng1 < 3 then
+      halt("ppm/wenoz reconstruction needs 3 ghost layers: " +
            "rebuild with -DCHAA_NG=3 (the default)");
     if kappa > 0.0 && eosCode == EOS_ISO then
       halt("thermal conduction requires the ideal-gas EOS");
+    if coolLambda0 > 0.0 && eosCode == EOS_ISO then
+      halt("cooling requires the ideal-gas EOS");
+    if (gridCode(0) == GRID_LOG || gridCode(0) == GRID_LOGDEC) &&
+       x1min <= 0.0 then
+      halt("log grids in x1 need x1min > 0");
+    if (gridCode(1) == GRID_LOG || gridCode(1) == GRID_LOGDEC) &&
+       x2min <= 0.0 then
+      halt("log grids in x2 need x2min > 0");
+    if (gridCode(2) == GRID_LOG || gridCode(2) == GRID_LOGDEC) &&
+       x3min <= 0.0 then
+      halt("log grids in x3 need x3min > 0");
+    if forceAmp > 0.0 && geom != Geom.cartesian then
+      halt("turbulence forcing is implemented for Cartesian boxes");
     if geom == Geom.spherical && act2 &&
        (x2min < -1.0e-12 || x2max > pi + 1.0e-12) then
       halt("spherical: theta must lie in [0, pi]");
@@ -72,6 +95,8 @@ module Chaa {
     forall idx in DInt do U[idx] = prim2cons(V[idx]);
     problemInternalBC(0.0);
     applyBCs(0.0);
+    initForcing();
+    initParticles();
 
     var t = 0.0;
     var step = 0;
@@ -86,7 +111,9 @@ module Chaa {
     var dt = computeDt();
     while t < tstop*(1.0 - 1.0e-12) && step < maxSteps {
       dt = min(dt, tstop - t);
+      updateForcing(dt);
       advance(dt, t);
+      advanceParticles(dt);
       t += dt;
       step += 1;
       if step % logEvery == 0 then

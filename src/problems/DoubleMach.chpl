@@ -5,12 +5,12 @@
  * --bcX2min=userdef --bcX2max=userdef; run to t = 0.2.
  */
 module DoubleMach {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
-  const post: StateVec = (8.0, 8.25*sin(pi/3.0), -8.25*cos(pi/3.0),
-                          0.0, 116.5);
-  const pre:  StateVec = (1.4, 0.0, 0.0, 0.0, 1.0);
+  const post = mkPrim(8.0, 8.25*sin(pi/3.0), -8.25*cos(pi/3.0),
+                      0.0, 116.5);
+  const pre  = mkPrim(1.4, 0.0, 0.0, 0.0, 1.0);
 
   proc setup() {
     forall (i, j, k) in DInt {

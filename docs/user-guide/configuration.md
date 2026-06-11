@@ -36,6 +36,8 @@ command line  (--key=value)   >   runtime_params.ini   >   built-in default
 |---|---|---|
 | `nx1, nx2, nx3` | `128, 1, 1` | cells per direction (1 = inactive dimension) |
 | `x1min, x1max` … | `0, 1` | domain extent per direction |
+| `gridX1, gridX2, gridX3` | `uniform` | grid law per direction: `uniform` \| `log` (spacing grows ∝x, needs xmin>0) \| `log-dec` (spacing shrinks with x) \| `stretch` (geometric progression) |
+| `stretchX1..3` | `1.05` | spacing ratio for `stretch` (>1 grows, <1 shrinks) |
 
 Coordinate meanings per geometry are listed in
 [equations & geometry](equations.md).
@@ -54,15 +56,19 @@ Coordinate meanings per geometry are listed in
 | `gravCentral` | `0` | GM of a central point mass at the origin |
 | `gravEps` | `0` | gravitational softening length |
 | `rhoFloor`, `prsFloor` | 10⁻¹², 10⁻¹⁴ | positivity floors |
+| `coolLambda0, coolAlpha, coolTfloor` | `0, 0.5, 10⁻⁶` | optically thin cooling Λ(T)=Λ₀Tᵅ (exact Townsend integration) |
+| `scDiff` | `0` | passive-scalar diffusivity |
+| `forceAmp, forceTcorr, forceKmin, forceKmax, forceSeed` | off | Ornstein-Uhlenbeck turbulence driving |
+| `nParticles, partSeed` | `0` | Lagrangian tracer particles |
 
 ## Numerics
 
 | key | default | options |
 |---|---|---|
-| `recon` | `linear` | `constant`, `linear`, `limo3`, `ppm` |
+| `recon` | `linear` | `constant`, `linear`, `limo3`, `ppm`, `wenoz` |
 | `limiter` | `vanleer` | `minmod`, `vanleer`, `mc` (PLM only) |
 | `riemann` | `hllc` | `llf`, `hll`, `hllc`, `exact` |
-| `integrator` | `rk2` | `euler`, `rk2`, `rk3` |
+| `integrator` | `rk2` | `euler`, `rk2`, `rk3`, `vl2` |
 
 ## Boundary conditions
 
@@ -71,7 +77,9 @@ One per side: `bcX1min`, `bcX1max`, `bcX2min`, `bcX2max`, `bcX3min`,
 
 | value | meaning |
 |---|---|
-| `outflow` | zero-gradient (default) |
+| `zero-gradient` | copy the nearest interior cell (default; `outflow` is a legacy alias) |
+| `outflow-diode` | zero-gradient, but the normal velocity is clamped so nothing can flow *in* |
+| `inflow-diode` | zero-gradient, but the normal velocity is clamped so nothing can flow *out* |
 | `periodic` | periodic wrap |
 | `reflect` | mirror, normal velocity flipped |
 | `axis` | reflect + azimuthal velocity flipped (use at r=0, θ=0, θ=π) |
@@ -95,7 +103,15 @@ ini file): `sodX0`, `sodRhoL/R`, `sodVxL/R`, `sodPrsL/R`;
 `inRho`, `inVx1..3`, `inPrs` (inflow state); `tcOmegaIn/Out`
 (Taylor–Couette wall rotation); `cylRad` (cylinder radius);
 `vortexBeta`; `khRhoIn/Out`, `khV0`, `khPert`, `khPrs`; `rtRhoTop/Bot`,
-`rtPrs0`, `rtPert`; `diskH0`, `diskJumpR`, `diskJumpW`; `twAmp`.
+`rtPrs0`, `rtPert`; `diskH0`, `diskJumpR`, `diskJumpW`; `twAmp`; `cloudChi`, `cloudRad`;
+`waveAmp`.
+
+Every bundled problem also ships its canonical configuration as
+`src/problems/<problem>_runtime_params.ini`, runnable directly:
+
+```sh
+./build/bin/chaa --paramsFile=src/problems/cloud_runtime_params.ini
+```
 
 ## Compile-time parameters
 
@@ -103,4 +119,5 @@ ini file): `sodX0`, `sodRhoL/R`, `sodVxL/R`, `sodPrsL/R`;
 |---|---|---|---|
 | `-DCHAA_NG=n` | `NG` | `3` | ghost layers (2 suffices below `ppm`) |
 | `-DCHAA_HDF5=ON/OFF` | `hdf5Enabled` | `ON` | HDF5 writer compiled in |
+| `-DCHAA_NSCAL=n` | `NSCAL` | `1` | passive tracer fields carried in the state vector |
 | `-DCHAA_CHPL_FLAGS=…` | — | `--fast` | extra `chpl` flags |

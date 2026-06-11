@@ -3,7 +3,7 @@
  * Parameters: khRho{In,Out}, khV0, khPert, khPrs.
  */
 module KelvinHelmholtz {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   proc setup() {
@@ -14,7 +14,10 @@ module KelvinHelmholtz {
       const vx  = if inner then khV0 else -khV0;
       const vy = khPert*sin(4.0*pi*x)
                * (exp(-(y-0.25)**2/0.005) + exp(-(y-0.75)**2/0.005));
-      V[i,j,k] = (rho, vx, vy, 0.0, khPrs);
+      var w = mkPrim(rho, vx, vy, 0.0, khPrs);
+      if ISC < NTOT then              // dye the inner layer
+        w(ISC) = if inner then 1.0 else 0.0;
+      V[i,j,k] = w;
     }
   }
 }

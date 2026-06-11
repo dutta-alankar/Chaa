@@ -18,6 +18,7 @@ Chaa, and documents what was ported.
 | `csiso constant/userdef` | `--eos=isothermal --csIso=… [--csSlope=…]` | locally isothermal cs ∝ R_cyl^slope covers the disk tests' cs profiles |
 | `[Gravity] potential central` | `--gravCentral=GM [--gravEps=…]` | point mass at the origin |
 | `TDiffusion explicit constant` | `--kappa=…` | explicit thermal conduction |
+| grid segments `u` / `l` / `s` | `--gridX*=uniform\|log\|log-dec\|stretch` (+`--stretchX*`) | closed-form non-uniform grid laws per direction |
 | `viscosity explicit constant` | `--mu=…` | full tensor in Cartesian, τ_Rφ in cylindrical/polar |
 
 ## Test-by-test mapping

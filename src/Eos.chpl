@@ -5,6 +5,19 @@ module Eos {
   use Params;
   use Math;
 
+  /* build a primitive state from the five hydro fields
+     (tracer slots default to zero) */
+  inline proc mkPrim(rho: real, v1: real, v2: real, v3: real,
+                     p: real): StateVec {
+    var w: StateVec;
+    w(IRHO) = rho;
+    w(IVX1) = v1;
+    w(IVX2) = v2;
+    w(IVX3) = v3;
+    w(IPRS) = p;
+    return w;
+  }
+
   inline proc prim2cons(w: StateVec): StateVec {
     var u: StateVec;
     u(IRHO) = w(IRHO);
@@ -13,6 +26,8 @@ module Eos {
     u(IMX3) = w(IRHO)*w(IVX3);
     u(IENG) = w(IPRS)/(gam - 1.0)
             + 0.5*w(IRHO)*(w(IVX1)**2 + w(IVX2)**2 + w(IVX3)**2);
+    for param s in ISC..NTOT-1 do      // tracers: rho * concentration
+      u(s) = w(IRHO)*w(s);
     return u;
   }
 
@@ -25,6 +40,8 @@ module Eos {
     w(IVX3) = u(IMX3)/rho;
     const ek = 0.5*rho*(w(IVX1)**2 + w(IVX2)**2 + w(IVX3)**2);
     w(IPRS) = max((gam - 1.0)*(u(IENG) - ek), prsFloor);
+    for param s in ISC..NTOT-1 do
+      w(s) = u(s)/rho;
     return w;
   }
 
@@ -48,6 +65,8 @@ module Eos {
     f(IMX3) = w(IRHO)*w(IVX3)*un;
     f(IMX1 + dir) += w(IPRS);
     f(IENG) = (E + w(IPRS))*un;
+    for param s in ISC..NTOT-1 do      // tracers ride on the mass flux
+      f(s) = w(s)*f(IRHO);
     return f;
   }
 }

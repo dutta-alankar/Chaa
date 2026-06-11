@@ -5,14 +5,16 @@
  * Parameters: sodX0, sodRho{L,R}, sodVx{L,R}, sodPrs{L,R}.
  */
 module Sod {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
 
   proc setup() {
     forall (i, j, k) in DInt {
-      if x1c(i) < sodX0 then
-        V[i,j,k] = (sodRhoL, sodVxL, 0.0, 0.0, sodPrsL);
-      else
-        V[i,j,k] = (sodRhoR, sodVxR, 0.0, 0.0, sodPrsR);
+      var w = if x1c(i) < sodX0
+              then mkPrim(sodRhoL, sodVxL, 0.0, 0.0, sodPrsL)
+              else mkPrim(sodRhoR, sodVxR, 0.0, 0.0, sodPrsR);
+      if ISC < NTOT then              // dye the left state: the tracer
+        w(ISC) = if x1c(i) < sodX0 then 1.0 else 0.0;  // marks the contact
+      V[i,j,k] = w;
     }
   }
 }

@@ -76,22 +76,81 @@ cmake --build build
 CMake globs `src/problems/*.chpl`, so the new file is compiled in
 automatically.
 
-## Step 4 — add your own parameters (optional)
+## Step 4 — ship a problem parameter file
+
+Every bundled problem carries its canonical configuration as
+`src/problems/<problem>_runtime_params.ini` — give yours one too:
+
+```ini
+# src/problems/blob_runtime_params.ini
+problem  = blob
+geometry = cartesian
+nx1 = 256
+nx2 = 128
+x1min = 0
+x1max = 4
+x2min = -1
+x2max = 1
+bcX1min = inflow
+bcX1max = outflow-diode
+inVx1 = 2.7
+inPrs = 0.714
+cen1 = 1
+blastR0 = 0.15
+tstop = 2
+outFormats = hdf5
+```
+
+Then the whole run is reproducible from one line (and any key can still
+be overridden on the command line, which always wins):
+
+```sh
+./build/bin/chaa --paramsFile=src/problems/blob_runtime_params.ini --nx1=512
+```
+
+## Step 5 — add simulation-specific parameters
 
 To make, say, the blob density ratio configurable as `--blobChi=…` and
-from `runtime_params.ini`:
+as `blobChi = …` in parameter files, add it to the **three-layer
+parameter system** (command line > ini file > built-in default):
 
-1. `src/Cli.chpl` — declare the sentinel flag:
+1. `src/Cli.chpl` — declare the command-line flag with an "unset"
+   sentinel (`UNSET_R` for reals, `UNSET_I` for ints, `UNSET_S` for
+   strings):
    ```chapel
    config const blobChi = UNSET_R;
    ```
-2. `src/Params.chpl` — resolve it (command line > ini > default):
+2. `src/Params.chpl` — resolve the effective value; the second argument
+   is the ini-file key (keep it identical to the flag name), the third
+   is the built-in default:
    ```chapel
    const blobChi = valR(Cli.blobChi, "blobChi", 10.0);
    ```
-3. use `blobChi` in your `setup()`.
+   (`valI` / `valS` for integer and string parameters.)
+3. use `blobChi` anywhere — your `setup()`, boundary hooks, validators.
+4. document the default in your problem's `*_runtime_params.ini`.
 
-## Step 5 — custom boundary conditions (optional)
+Before adding a new name, check whether a generic knob already fits:
+`inRho/inVx1..3/inPrs` (ambient/inflow state), `cen1..3` (a centre),
+`blastR0`/`cloudRad` (a radius), `mu`, `kappa`, `gravCentral`, … —
+reusing them keeps the namespace small.
+
+## Step 6 — tracers and particles (optional, free)
+
+- The build carries `NSCAL` passive tracer fields (default 1; set
+  `-DCHAA_NSCAL=…`). Dye any region in `setup()`:
+  ```chapel
+  var w = mkPrim(rho, vx, vy, 0.0, p);
+  if ISC < NTOT then w(ISC) = if inside then 1.0 else 0.0;
+  V[i,j,k] = w;
+  ```
+  Tracers are advected (bounded, mass-flux-consistent), optionally
+  diffused with `--scDiff`, and written as `sc0…` in every output.
+- Lagrangian tracer particles need no problem code at all:
+  `--nParticles=N` scatters them uniformly and writes
+  `<problem>.particles.NNNN.txt` beside every dump.
+
+## Step 7 — custom boundary conditions (optional)
 
 For anything beyond the built-in BC types, set a side to
 `--bcX2min=userdef` and provide a hook. The ghost slab is just a slice
@@ -114,14 +173,14 @@ of the padded domain; see `DoubleMach.chpl` (time-dependent inflow) and
 Register it in `Problems.problemUserBC`. Side ids: 0/1 = x1min/max,
 2/3 = x2min/max, 4/5 = x3min/max.
 
-## Step 6 — internal (immersed) boundaries (optional)
+## Step 8 — internal (immersed) boundaries (optional)
 
 To carve solid objects out of the flow, set `solveMask` in `setup()`
 and re-impose the solid state after every stage with an `internalBC(t)`
 hook — `CylinderFlow.chpl` is a complete example. Masked cells are
 skipped by the update and the time-step computation.
 
-## Step 7 — add a validated test (recommended)
+## Step 9 — add a validated test (recommended)
 
 1. add a line to `tests/cases.conf`:
    ```
@@ -137,6 +196,8 @@ skipped by the update and the time-step computation.
 
 - [x] `src/problems/MyProblem.chpl` with `proc setup()`
 - [x] import + `when "myproblem" do MyProblem.setup();` in `src/Problems.chpl`
-- [ ] new knobs in `Cli.chpl` + `Params.chpl` (if needed)
+- [x] `src/problems/myproblem_runtime_params.ini` with the canonical run
+- [ ] simulation-specific knobs in `Cli.chpl` + `Params.chpl` (if needed)
+- [ ] tracer dye / particles (if useful)
 - [ ] `userBC` / `internalBC` hooks (if needed)
 - [ ] a case line + validator, wired into CI

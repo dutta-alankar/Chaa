@@ -9,14 +9,14 @@
  * Run with --kappa>0 on a periodic domain.
  */
 module ThermalWave {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use Math;
 
   proc setup() {
     const Lx = x1max - x1min;
     forall (i, j, k) in DInt {
       const x = x1c(i);
-      V[i,j,k] = (1.0 - twAmp*sin(2.0*pi*(x - x1min)/Lx),
+      V[i,j,k] = mkPrim(1.0 - twAmp*sin(2.0*pi*(x - x1min)/Lx),
                   0.0, 0.0, 0.0, 1.0);
     }
   }

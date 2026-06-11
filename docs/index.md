@@ -26,11 +26,15 @@ the hood.
   third-order LimO3 and PPM reconstruction; Rusanov, HLL, HLLC and exact
   (Godunov) Riemann solvers; SSP RK1/RK2/RK3 time stepping.
 - **Physics modules** — ideal-gas and (locally) isothermal equations of
-  state, explicit viscosity, explicit thermal conduction, constant and
-  central point-mass gravity.
+  state, explicit viscosity, thermal conduction, optically thin cooling
+  (exact Townsend integration), constant and central point-mass
+  gravity, OU turbulence driving, passive tracer fields and Lagrangian
+  tracer particles.
+- **Flexible meshes** — uniform, logarithmic and geometrically
+  stretched grid laws per direction, all with closed-form metrics.
 - **Output for real workflows** — ASCII tables (1D), legacy VTK, and
   HDF5 with XDMF companions that load directly into ParaView and VisIt.
-- **Validated, continuously** — 26 test problems (Sod, Sedov–Taylor,
+- **Validated, continuously** — 34 test cases (Sod, Sedov–Taylor,
   blast waves, double Mach reflection, Kelvin–Helmholtz,
   Rayleigh–Taylor, isentropic vortex, Taylor–Couette, flow past a
   cylinder, thermal diffusion, rotating disks, …) are checked

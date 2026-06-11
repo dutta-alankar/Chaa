@@ -1,9 +1,15 @@
-/* Grid.chpl — uniform structured mesh and curvilinear geometry factors.
+/* Grid.chpl — structured mesh and curvilinear geometry factors.
  *
- * The grid is uniform in each *coordinate* (x, R or r, z, theta, phi), so
- * coordinates and all metric factors are closed-form functions of the
- * index.  No coordinate arrays are stored, which makes every geometric
- * query communication-free on any locale (performance portable).
+ * Each coordinate direction follows one of four closed-form grid laws
+ * (Idefix-style):
+ *   uniform   constant spacing
+ *   log       x_f(i) = xmin (xmax/xmin)^((i-1)/n)   — spacing grows ~x
+ *   log-dec   mirrored log                          — spacing shrinks ~x
+ *   stretch   spacings in geometric progression with ratio stretchX*
+ *             (>1 grows, <1 shrinks)
+ * Coordinates and all metric factors remain closed-form functions of
+ * the index — no coordinate arrays are stored, so every geometric query
+ * is communication-free on any locale (performance portable).
  *
  * Coordinate meaning per geometry (PLUTO conventions):
  *   cartesian   : x1=x,  x2=y,     x3=z
@@ -27,17 +33,67 @@ module Grid {
         ng2 = if act2 then NG else 0,
         ng3 = if act3 then NG else 0;
 
+  // mean spacings (exact for uniform; used only as scales elsewhere)
   const dx1 = (x1max - x1min)/nx1,
         dx2 = (x2max - x2min)/nx2,
         dx3 = (x3max - x3min)/nx3;
 
-  /* face and centre coordinates: face i is the *left* face of cell i */
-  inline proc x1f(i: int): real do return x1min + (i-1)*dx1;
-  inline proc x2f(j: int): real do return x2min + (j-1)*dx2;
-  inline proc x3f(k: int): real do return x3min + (k-1)*dx3;
-  inline proc x1c(i: int): real do return x1min + (i-0.5)*dx1;
-  inline proc x2c(j: int): real do return x2min + (j-0.5)*dx2;
-  inline proc x3c(k: int): real do return x3min + (k-0.5)*dx3;
+  /* generic face coordinate under a grid law; face i is the *left*
+     face of cell i, i in 1..n+1 (ghost faces extrapolate the law) */
+  inline proc lawFace(code: int, xmin: real, xmax: real, n: int,
+                      r: real, i: int): real {
+    select code {
+      when GRID_UNIFORM do return xmin + (i-1.0)*(xmax - xmin)/n;
+      when GRID_LOG     do return xmin*(xmax/xmin)**((i-1.0)/n);
+      when GRID_LOGDEC  do
+        return xmin + xmax - xmin*(xmax/xmin)**((n+1.0-i)/n);
+      when GRID_STRETCH do
+        return xmin + (xmax - xmin)*(r**(i-1.0) - 1.0)/(r**(n:real) - 1.0);
+      otherwise do return xmin + (i-1.0)*(xmax - xmin)/n;
+    }
+    return 0.0;
+  }
+
+  /* inverse of the face law: fractional face index of coordinate x
+     (used by the tracer particles to locate themselves) */
+  inline proc lawIndex(code: int, xmin: real, xmax: real, n: int,
+                       r: real, x: real): real {
+    select code {
+      when GRID_UNIFORM do return 1.0 + (x - xmin)*n/(xmax - xmin);
+      when GRID_LOG     do
+        return 1.0 + n*log(x/xmin)/log(xmax/xmin);
+      when GRID_LOGDEC  do
+        return (n + 1.0) - n*log((xmin + xmax - x)/xmin)/log(xmax/xmin);
+      when GRID_STRETCH do
+        return 1.0 + log(1.0 + (x - xmin)*(r**(n:real) - 1.0)
+                               /(xmax - xmin))/log(r);
+      otherwise do return 1.0 + (x - xmin)*n/(xmax - xmin);
+    }
+    return 1.0;
+  }
+
+  inline proc x1f(i: int): real do
+    return lawFace(gridCode(0), x1min, x1max, nx1, stretchX1, i);
+  inline proc x2f(j: int): real do
+    return lawFace(gridCode(1), x2min, x2max, nx2, stretchX2, j);
+  inline proc x3f(k: int): real do
+    return lawFace(gridCode(2), x3min, x3max, nx3, stretchX3, k);
+
+  inline proc x1c(i: int): real do return 0.5*(x1f(i) + x1f(i+1));
+  inline proc x2c(j: int): real do return 0.5*(x2f(j) + x2f(j+1));
+  inline proc x3c(k: int): real do return 0.5*(x3f(k) + x3f(k+1));
+
+  /* local cell widths */
+  inline proc dx1At(i: int): real do return x1f(i+1) - x1f(i);
+  inline proc dx2At(j: int): real do return x2f(j+1) - x2f(j);
+  inline proc dx3At(k: int): real do return x3f(k+1) - x3f(k);
+
+  /* distance between adjacent cell centres across face q along dir */
+  inline proc dcAt(dir: int, q: int): real {
+    if dir == 0 then return x1c(q) - x1c(q-1);
+    if dir == 1 then return x2c(q) - x2c(q-1);
+    return x3c(q) - x3c(q-1);
+  }
 
   /* ---- direction 1 (x | R | r) ---- */
   inline proc fA1(i: int): real {
@@ -51,7 +107,7 @@ module Grid {
 
   inline proc invV1(i: int): real {
     select geom {
-      when Geom.cartesian do return 1.0/dx1;
+      when Geom.cartesian do return 1.0/dx1At(i);
       when Geom.cylindrical, Geom.polar {
         const rm = x1f(i), rp = x1f(i+1);
         return 2.0/abs(rp**2 - rm**2);
@@ -61,7 +117,7 @@ module Grid {
         return 3.0/(rp**3 - rm**3);
       }
     }
-    return 1.0/dx1;
+    return 1.0/dx1At(i);
   }
 
   /* radius used in geometric source terms; chosen so that uniform
@@ -87,7 +143,7 @@ module Grid {
   inline proc invV2(j: int): real {
     if geom == Geom.spherical then
       return 1.0/(cos(x2f(j)) - cos(x2f(j+1)));
-    return 1.0/dx2;
+    return 1.0/dx2At(j);
   }
 
   /* extra 1/r factor multiplying the direction-2 divergence */
@@ -109,12 +165,12 @@ module Grid {
   /* mean sin(theta) over the cell (spherical) */
   inline proc sinGeo(j: int): real {
     if geom == Geom.spherical then
-      return (cos(x2f(j)) - cos(x2f(j+1)))/dx2;
+      return (cos(x2f(j)) - cos(x2f(j+1)))/dx2At(j);
     return 1.0;
   }
 
   /* ---- direction 3 (z | phi) ---- */
-  inline proc invV3(): real do return 1.0/dx3;
+  inline proc invV3(k: int): real do return 1.0/dx3At(k);
 
   /* extra metric factor multiplying the direction-3 divergence */
   inline proc g3(i: int, j: int): real {
@@ -126,23 +182,23 @@ module Grid {
   }
 
   /* ---- physical (linear) cell sizes, for the CFL condition ---- */
-  inline proc dl1(): real do return dx1;
+  inline proc dl1(i: int): real do return dx1At(i);
 
-  inline proc dl2(i: int): real {
+  inline proc dl2(i: int, j: int): real {
     select geom {
-      when Geom.polar     do return x1c(i)*dx2;
-      when Geom.spherical do return x1c(i)*dx2;
-      otherwise           do return dx2;
+      when Geom.polar     do return x1c(i)*dx2At(j);
+      when Geom.spherical do return x1c(i)*dx2At(j);
+      otherwise           do return dx2At(j);
     }
-    return dx2;
+    return dx2At(j);
   }
 
-  inline proc dl3(i: int, j: int): real {
+  inline proc dl3(i: int, j: int, k: int): real {
     select geom {
-      when Geom.spherical do return x1c(i)*sinGeo(j)*dx3;
-      otherwise           do return dx3;   // polar: x3 = z
+      when Geom.spherical do return x1c(i)*sinGeo(j)*dx3At(k);
+      otherwise           do return dx3At(k);   // polar: x3 = z
     }
-    return dx3;
+    return dx3At(k);
   }
 
   /* ---- true cell volume; inactive angular dimensions contribute their
@@ -152,24 +208,24 @@ module Grid {
     var f1, f2, f3: real;
     select geom {
       when Geom.cartesian {
-        f1 = dx1;
-        f2 = if act2 then dx2 else 1.0;
-        f3 = if act3 then dx3 else 1.0;
+        f1 = dx1At(i);
+        f2 = if act2 then dx2At(j) else 1.0;
+        f3 = if act3 then dx3At(k) else 1.0;
       }
       when Geom.cylindrical {            // x1=R, x2=z, x3=phi(axisym)
         f1 = 0.5*abs(x1f(i+1)**2 - x1f(i)**2);
-        f2 = if act2 then dx2 else 1.0;
-        f3 = if act3 then dx3 else 2.0*pi;
+        f2 = if act2 then dx2At(j) else 1.0;
+        f3 = if act3 then dx3At(k) else 2.0*pi;
       }
       when Geom.polar {                  // x1=R, x2=phi, x3=z
         f1 = 0.5*abs(x1f(i+1)**2 - x1f(i)**2);
-        f2 = if act2 then dx2 else 2.0*pi;
-        f3 = if act3 then dx3 else 1.0;
+        f2 = if act2 then dx2At(j) else 2.0*pi;
+        f3 = if act3 then dx3At(k) else 1.0;
       }
       when Geom.spherical {              // x1=r, x2=theta, x3=phi
         f1 = (x1f(i+1)**3 - x1f(i)**3)/3.0;
         f2 = if act2 then (cos(x2f(j)) - cos(x2f(j+1))) else 2.0;
-        f3 = if act3 then dx3 else 2.0*pi;
+        f3 = if act3 then dx3At(k) else 2.0*pi;
       }
     }
     return f1*f2*f3;

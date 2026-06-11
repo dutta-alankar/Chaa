@@ -9,15 +9,19 @@
 module Params {
   import Cli;
   import IniReader;
+  import CompileParams.NSCAL;
 
-  param NVAR = 5;
+  param NVAR = 5;                 // hydro slots
+  param NTOT = NVAR + NSCAL;      // hydro + passive tracer fields
 
   // primitive variable slots
   param IRHO = 0, IVX1 = 1, IVX2 = 2, IVX3 = 3, IPRS = 4;
   // conservative variable slots
   param IMX1 = 1, IMX2 = 2, IMX3 = 3, IENG = 4;
+  // first passive-scalar slot (concentration in prims, rho*s in cons)
+  param ISC = 5;
 
-  type StateVec = NVAR*real;
+  type StateVec = NTOT*real;
 
   enum Geom { cartesian, cylindrical, polar, spherical }
 
@@ -50,6 +54,13 @@ module Params {
         x2max = valR(Cli.x2max, "x2max", 1.0);
   const x3min = valR(Cli.x3min, "x3min", 0.0),
         x3max = valR(Cli.x3max, "x3max", 1.0);
+  // grid law per direction (uniform | log | log-dec | stretch)
+  const gridX1 = valS(Cli.gridX1, "gridX1", "uniform"),
+        gridX2 = valS(Cli.gridX2, "gridX2", "uniform"),
+        gridX3 = valS(Cli.gridX3, "gridX3", "uniform");
+  const stretchX1 = valR(Cli.stretchX1, "stretchX1", 1.05),
+        stretchX2 = valR(Cli.stretchX2, "stretchX2", 1.05),
+        stretchX3 = valR(Cli.stretchX3, "stretchX3", 1.05);
 
   /* --- physics --- */
   const gam      = valR(Cli.gam, "gam", 1.4);       // adiabatic index
@@ -65,6 +76,20 @@ module Params {
   const gravEps     = valR(Cli.gravEps, "gravEps", 0.0);         // softening
   const rhoFloor = valR(Cli.rhoFloor, "rhoFloor", 1.0e-12),
         prsFloor = valR(Cli.prsFloor, "prsFloor", 1.0e-14);
+  // optically thin cooling: edot = -rho^2 Lambda0 T^alpha (Townsend exact)
+  const coolLambda0 = valR(Cli.coolLambda0, "coolLambda0", 0.0),
+        coolAlpha   = valR(Cli.coolAlpha, "coolAlpha", 0.5),
+        coolTfloor  = valR(Cli.coolTfloor, "coolTfloor", 1.0e-6);
+  const scDiff = valR(Cli.scDiff, "scDiff", 0.0);   // scalar diffusivity
+  // turbulence driving (Ornstein-Uhlenbeck spectral forcing)
+  const forceAmp   = valR(Cli.forceAmp, "forceAmp", 0.0),
+        forceTcorr = valR(Cli.forceTcorr, "forceTcorr", 1.0);
+  const forceKmin = valI(Cli.forceKmin, "forceKmin", 1),
+        forceKmax = valI(Cli.forceKmax, "forceKmax", 2);
+  const forceSeed = valI(Cli.forceSeed, "forceSeed", 1234);
+  // Lagrangian tracer particles
+  const nParticles = valI(Cli.nParticles, "nParticles", 0);
+  const partSeed   = valI(Cli.partSeed, "partSeed", 4321);
 
   /* --- numerics --- */
   const cfl        = valR(Cli.cfl, "cfl", 0.4);
@@ -77,13 +102,14 @@ module Params {
   const riemann    = valS(Cli.riemann, "riemann", "hllc");
   const integrator = valS(Cli.integrator, "integrator", "rk2");
 
-  /* --- boundary conditions: periodic|outflow|reflect|axis|inflow|userdef */
-  const bcX1min = valS(Cli.bcX1min, "bcX1min", "outflow"),
-        bcX1max = valS(Cli.bcX1max, "bcX1max", "outflow");
-  const bcX2min = valS(Cli.bcX2min, "bcX2min", "outflow"),
-        bcX2max = valS(Cli.bcX2max, "bcX2max", "outflow");
-  const bcX3min = valS(Cli.bcX3min, "bcX3min", "outflow"),
-        bcX3max = valS(Cli.bcX3max, "bcX3max", "outflow");
+  /* --- boundary conditions: periodic | zero-gradient | reflect | axis |
+         inflow | outflow-diode | inflow-diode | userdef --- */
+  const bcX1min = valS(Cli.bcX1min, "bcX1min", "zero-gradient"),
+        bcX1max = valS(Cli.bcX1max, "bcX1max", "zero-gradient");
+  const bcX2min = valS(Cli.bcX2min, "bcX2min", "zero-gradient"),
+        bcX2max = valS(Cli.bcX2max, "bcX2max", "zero-gradient");
+  const bcX3min = valS(Cli.bcX3min, "bcX3min", "zero-gradient"),
+        bcX3max = valS(Cli.bcX3max, "bcX3max", "zero-gradient");
 
   /* --- output --- */
   const outDt      = valR(Cli.outDt, "outDt", 0.0);
@@ -133,9 +159,24 @@ module Params {
         diskJumpR = valR(Cli.diskJumpR, "diskJumpR", 1.5),
         diskJumpW = valR(Cli.diskJumpW, "diskJumpW", 0.15);
   const twAmp = valR(Cli.twAmp, "twAmp", 1.0e-3);   // thermalWave amplitude
+  const cloudChi = valR(Cli.cloudChi, "cloudChi", 10.0),  // density contrast
+        cloudRad = valR(Cli.cloudRad, "cloudRad", 0.25);
+  const waveAmp = valR(Cli.waveAmp, "waveAmp", 1.0e-4);   // linearWave
 
   /* --- derived --- */
   const geom = parseGeom(geometry);
+
+  /* output/dataset name of state-vector slot c */
+  proc fieldName(c: int): string {
+    select c {
+      when 0 do return "rho";
+      when 1 do return "vx1";
+      when 2 do return "vx2";
+      when 3 do return "vx3";
+      when 4 do return "prs";
+      otherwise do return "sc" + (c - ISC):string;
+    }
+  }
 
   proc parseGeom(s: string): Geom {
     select s {
@@ -155,19 +196,24 @@ module Params {
              + (if act3 then 1 else 0);
 
   // integer codes (avoid string compares in hot loops)
-  param RECON_CONST = 0, RECON_LINEAR = 1, RECON_LIMO3 = 2, RECON_PPM = 3;
+  param RECON_CONST = 0, RECON_LINEAR = 1, RECON_LIMO3 = 2, RECON_PPM = 3,
+        RECON_WENOZ = 4;
   param LIM_MINMOD = 0, LIM_VANLEER = 1, LIM_MC = 2;
   param RS_LLF = 0, RS_HLL = 1, RS_HLLC = 2, RS_EXACT = 3;
-  param TI_EULER = 0, TI_RK2 = 1, TI_RK3 = 2;
+  param TI_EULER = 0, TI_RK2 = 1, TI_RK3 = 2, TI_VL2 = 3;
   param EOS_IDEAL = 0, EOS_ISO = 1;
-  param BC_PERIODIC = 0, BC_OUTFLOW = 1, BC_REFLECT = 2, BC_AXIS = 3,
-        BC_INFLOW = 4, BC_USERDEF = 5;
+  param GRID_UNIFORM = 0, GRID_LOG = 1, GRID_LOGDEC = 2, GRID_STRETCH = 3;
+  param BC_PERIODIC = 0, BC_ZEROGRAD = 1, BC_REFLECT = 2, BC_AXIS = 3,
+        BC_INFLOW = 4, BC_USERDEF = 5, BC_OUT_DIODE = 6, BC_IN_DIODE = 7;
 
   const eosCode = parseOpt(eos, ("ideal", "isothermal"));
-  const reconCode = parseOpt(recon, ("constant", "linear", "limo3", "ppm"));
+  const reconCode = parseOpt(recon,
+                             ("constant", "linear", "limo3", "ppm", "wenoz"));
   const limCode   = parseOpt(limiter, ("minmod", "vanleer", "mc"));
   const rsCode    = parseOpt(riemann, ("llf", "hll", "hllc", "exact"));
-  const tiCode    = parseOpt(integrator, ("euler", "rk2", "rk3"));
+  const tiCode    = parseOpt(integrator, ("euler", "rk2", "rk3", "vl2"));
+
+  const gridCode = (parseGrid(gridX1), parseGrid(gridX2), parseGrid(gridX3));
 
   const bcCode = (parseBC(bcX1min), parseBC(bcX1max),
                   parseBC(bcX2min), parseBC(bcX2max),
@@ -179,14 +225,27 @@ module Params {
     halt("invalid option: " + s);
   }
 
+  proc parseGrid(s: string): int {
+    select s {
+      when "uniform"  do return GRID_UNIFORM;
+      when "log"      do return GRID_LOG;      // spacing grows with x
+      when "log-dec"  do return GRID_LOGDEC;   // spacing shrinks with x
+      when "stretch"  do return GRID_STRETCH;  // geometric progression
+      otherwise do halt("unknown grid law: " + s);
+    }
+  }
+
   proc parseBC(s: string): int {
     select s {
-      when "periodic" do return BC_PERIODIC;
-      when "outflow"  do return BC_OUTFLOW;
-      when "reflect"  do return BC_REFLECT;
-      when "axis"     do return BC_AXIS;
-      when "inflow"   do return BC_INFLOW;
-      when "userdef"  do return BC_USERDEF;
+      when "periodic"      do return BC_PERIODIC;
+      when "zero-gradient" do return BC_ZEROGRAD;
+      when "outflow"       do return BC_ZEROGRAD;  // legacy alias
+      when "reflect"       do return BC_REFLECT;
+      when "axis"          do return BC_AXIS;
+      when "inflow"        do return BC_INFLOW;
+      when "outflow-diode" do return BC_OUT_DIODE; // zero-grad, no inflow
+      when "inflow-diode"  do return BC_IN_DIODE;  // zero-grad, no outflow
+      when "userdef"       do return BC_USERDEF;
       otherwise do halt("unknown boundary condition: " + s);
     }
   }

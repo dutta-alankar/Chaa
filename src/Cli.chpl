@@ -28,6 +28,10 @@ module Cli {
   config const x1min = UNSET_R, x1max = UNSET_R;
   config const x2min = UNSET_R, x2max = UNSET_R;
   config const x3min = UNSET_R, x3max = UNSET_R;
+  // grid law per direction: uniform | log | log-dec | stretch
+  config const gridX1 = UNSET_S, gridX2 = UNSET_S, gridX3 = UNSET_S;
+  config const stretchX1 = UNSET_R, stretchX2 = UNSET_R,
+               stretchX3 = UNSET_R;          // geometric-progression ratio
 
   /* --- physics --- */
   config const gam   = UNSET_R;
@@ -38,6 +42,16 @@ module Cli {
   config const grav1 = UNSET_R, grav2 = UNSET_R, grav3 = UNSET_R;
   config const gravCentral = UNSET_R, gravEps = UNSET_R;
   config const rhoFloor = UNSET_R, prsFloor = UNSET_R;
+  // optically thin cooling: Lambda(T) = coolLambda0 * T^coolAlpha
+  config const coolLambda0 = UNSET_R, coolAlpha = UNSET_R,
+               coolTfloor = UNSET_R;
+  config const scDiff = UNSET_R;        // passive-scalar diffusivity
+  // spectral (Ornstein-Uhlenbeck) turbulence driving
+  config const forceAmp = UNSET_R, forceTcorr = UNSET_R;
+  config const forceKmin = UNSET_I, forceKmax = UNSET_I;
+  config const forceSeed = UNSET_I;
+  // Lagrangian tracer particles
+  config const nParticles = UNSET_I, partSeed = UNSET_I;
 
   /* --- numerics --- */
   config const cfl = UNSET_R, cflVisc = UNSET_R;
@@ -76,6 +90,8 @@ module Cli {
                rtPert = UNSET_R;
   config const diskH0 = UNSET_R, diskJumpR = UNSET_R, diskJumpW = UNSET_R;
   config const twAmp = UNSET_R;
+  config const cloudChi = UNSET_R, cloudRad = UNSET_R;
+  config const waveAmp = UNSET_R;
 
   inline proc isUnset(v: int)    do return v == UNSET_I;
   inline proc isUnset(v: real)   do return isNan(v);

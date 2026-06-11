@@ -11,7 +11,7 @@ module CylinderFlow {
       const x = x1c(i), y = x2c(j);
       const inside = (x - cen1)**2 + (y - cen2)**2 < cylRad**2;
       solveMask[i,j,k] = !inside;
-      V[i,j,k] = (inRho, if inside then 0.0 else inVx1, 0.0, 0.0, inPrs);
+      V[i,j,k] = mkPrim(inRho, if inside then 0.0 else inVx1, 0.0, 0.0, inPrs);
     }
     solveMask.updateFluff();
   }
@@ -20,7 +20,7 @@ module CylinderFlow {
   proc internalBC(t: real) {
     forall idx in DInt {
       if !solveMask[idx] {
-        V[idx] = (inRho, 0.0, 0.0, 0.0, inPrs);
+        V[idx] = mkPrim(inRho, 0.0, 0.0, 0.0, inPrs);
         U[idx] = prim2cons(V[idx]);
       }
     }

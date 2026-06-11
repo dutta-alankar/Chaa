@@ -3,7 +3,7 @@
  * 1D Cartesian on [0,1] with reflecting walls; run to t = 0.038.
  */
 module TwoBlast {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
 
   proc setup() {
     forall (i, j, k) in DInt {
@@ -11,7 +11,7 @@ module TwoBlast {
       var p = 0.01;
       if x < 0.1 then p = 1000.0;
       else if x > 0.9 then p = 100.0;
-      V[i,j,k] = (1.0, 0.0, 0.0, 0.0, p);
+      V[i,j,k] = mkPrim(1.0, 0.0, 0.0, 0.0, p);
     }
   }
 }

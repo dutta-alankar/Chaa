@@ -5,14 +5,18 @@ module Riemann {
   use Math;
 
   inline proc riemannFlux(wL: StateVec, wR: StateVec, dir: int): StateVec {
+    var f: StateVec;
     select rsCode {
-      when RS_LLF   do return llf(wL, wR, dir);
-      when RS_HLL   do return hll(wL, wR, dir);
-      when RS_HLLC  do return hllc(wL, wR, dir);
-      when RS_EXACT do return exact(wL, wR, dir);
-      otherwise     do return hllc(wL, wR, dir);
+      when RS_LLF   do f = llf(wL, wR, dir);
+      when RS_HLL   do f = hll(wL, wR, dir);
+      when RS_HLLC  do f = hllc(wL, wR, dir);
+      when RS_EXACT do f = exact(wL, wR, dir);
+      otherwise     do f = hllc(wL, wR, dir);
     }
-    return hllc(wL, wR, dir);
+    // passive tracers: upwind concentration carried by the mass flux
+    for param s in ISC..NTOT-1 do
+      f(s) = (if f(IRHO) >= 0.0 then wL(s) else wR(s))*f(IRHO);
+    return f;
   }
 
   inline proc llf(wL: StateVec, wR: StateVec, dir: int): StateVec {

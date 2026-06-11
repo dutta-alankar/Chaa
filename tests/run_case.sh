@@ -28,6 +28,8 @@ run_one() {
   rm -rf "$out"
   mkdir -p "$out"
   echo "=== running $case ==="
+  # run from the repo root so relative --paramsFile paths resolve
+  cd "$HERE"
   # shellcheck disable=SC2086
   "$CHAA_BIN" $flags --outDir="$out" --logEvery=1000000000
   "$PY" "$HERE/tests/validate/validate.py" "$case" "$out"

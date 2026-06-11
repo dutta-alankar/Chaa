@@ -17,7 +17,8 @@ find_program(CHPL_EXECUTABLE chpl REQUIRED
              DOC "Chapel compiler (https://chapel-lang.org)")
 
 option(CHAA_HDF5 "Enable HDF5 output (links -lhdf5)" ON)
-set(CHAA_NG "3" CACHE STRING "ghost-cell layers (3 needed for ppm)")
+set(CHAA_NG "3" CACHE STRING "ghost-cell layers (3 needed for ppm/wenoz)")
+set(CHAA_NSCAL "1" CACHE STRING "passive tracer fields")
 set(CHAA_CHPL_FLAGS "--fast" CACHE STRING "chpl optimization/extra flags")
 
 file(GLOB CHAA_SOURCES
@@ -26,7 +27,7 @@ file(GLOB CHAA_SOURCES
 set(CHAA_H5_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/src/chaa_h5.h)
 
 separate_arguments(CHPL_FLAG_LIST UNIX_COMMAND "${CHAA_CHPL_FLAGS}")
-list(APPEND CHPL_FLAG_LIST -sNG=${CHAA_NG})
+list(APPEND CHPL_FLAG_LIST -sNG=${CHAA_NG} -sNSCAL=${CHAA_NSCAL})
 
 if(CHAA_HDF5)
   find_library(HDF5_LIBRARY

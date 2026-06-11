@@ -7,7 +7,7 @@
  * geometry and dimensionality.
  */
 module Sedov {
-  use Params, Grid, State;
+  use Params, Grid, State, Eos;
   use ProblemUtils;
 
   proc setup() {
@@ -18,7 +18,7 @@ module Sedov {
     const pIn = (gam - 1.0)*sedovE0/vol;
     forall (i, j, k) in DInt {
       const p = if distFromCentre(i,j,k) < sedovR0 then pIn else sedovPrsAmb;
-      V[i,j,k] = (sedovRhoAmb, 0.0, 0.0, 0.0, p);
+      V[i,j,k] = mkPrim(sedovRhoAmb, 0.0, 0.0, 0.0, p);
     }
   }
 }

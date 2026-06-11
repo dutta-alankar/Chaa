@@ -13,6 +13,7 @@ preserving Runge–Kutta scheme.
 | `linear` | 2 | 3 cells | MUSCL/PLM with `--limiter=minmod\|vanleer\|mc` |
 | `limo3` | 3 | 3 cells | Čada & Torrilhon (2009) limiter with the radius-of-curvature switch, as in Idefix |
 | `ppm` | up to 4 (smooth) | 5 cells | parabolic face values with the extremum-preserving limiter of Colella & Sekora (2008) / Peterson & Hammett (2013); needs `NG ≥ 3` ghost layers (the default) |
+| `wenoz` | 5 (smooth) | 5 cells | WENO-Z (Borges et al. 2008), as in AthenaPK; needs `NG ≥ 3` |
 
 Measured on the isentropic-vortex accuracy test (64², one advection
 period, L1 density error):
@@ -47,6 +48,16 @@ their isothermal counterparts.
 | `euler` | forward Euler | `nstages=1` |
 | `rk2` | SSP RK2 (Heun) | `nstages=2` |
 | `rk3` | SSP RK3 (Shu–Osher) | `nstages=3` |
+| `vl2` | van Leer predictor-corrector (midpoint) | AthenaPK's `vl2` |
+
+On the acoustic linear-wave test (128 cells, one period), `wenoz`+`vl2`
+preserves the eigenmode to 3×10⁻⁴ of its amplitude.
+
+All reconstructions evaluate their stencils with the local cell
+spacing, so they run unchanged on the logarithmic and stretched grid
+laws (formally the limiters keep their uniform-grid coefficients —
+second-order accuracy is retained, the higher-order schemes degrade
+gracefully on strongly stretched meshes).
 
 The time step combines the advective CFL condition over all active
 directions (using physical cell sizes — \(r\,\Delta\theta\),

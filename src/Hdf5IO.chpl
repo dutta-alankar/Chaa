@@ -53,61 +53,66 @@ module Hdf5IO {
     }
   }
 
-  /* write one dump: fields (C order, x1 fastest), cell-centre and node
-     coordinates, mapped node positions for curvilinear meshes, time */
-  proc dumpHdf5(path: string, time: real, ref locV) {
+  /* write one dump over the cell ranges (r1,r2,r3) — the full interior
+     on a single locale, or this locale's block in parallel piece
+     output.  Layout: fields in C order with x1 fastest, cell-centre and
+     node coordinates, mapped node positions for curvilinear meshes,
+     time stamp. */
+  proc dumpHdf5(path: string, time: real,
+                r1: range, r2: range, r3: range) {
     if !hdf5Enabled {
       halt("hdf5 output requested but the binary was compiled without " +
-           "HDF5 support; rebuild with HDF5=1 (-shdf5Enabled=true -lhdf5)");
+           "HDF5 support; rebuild with -DCHAA_HDF5=ON");
     } else {
+      use State;
       H5open();
       const fid = H5Fcreate(path.c_str(), H5F_ACC_TRUNC,
                             H5P_DEFAULT, H5P_DEFAULT);
       if fid < 0 then halt("HDF5: cannot create " + path);
 
+      const c1 = r1.size, c2 = r2.size, c3 = r3.size;
+
       // ---- fields ----
-      const n = nx1*nx2*nx3;
-      var buf: [0..#n] real;
-      const names = ("rho", "vx1", "vx2", "vx3", "prs");
-      for param c in 0..NVAR-1 {
-        forall (i, j, k) in {1..nx1, 1..nx2, 1..nx3} with (ref buf) do
-          buf[((k-1)*nx2 + (j-1))*nx1 + (i-1)] = locV[i, j, k](c);
+      var buf: [0..#(c1*c2*c3)] real;
+      for param c in 0..NTOT-1 {
+        forall (i, j, k) in {r1, r2, r3} with (ref buf) do
+          buf[((k-r3.low)*c2 + (j-r2.low))*c1 + (i-r1.low)] = V[i, j, k](c);
         select ndim {
-          when 1 do h5PutArray(fid, names(c), 1, nx1, 1, 1, buf);
-          when 2 do h5PutArray(fid, names(c), 2, nx2, nx1, 1, buf);
-          otherwise do h5PutArray(fid, names(c), 3, nx3, nx2, nx1, buf);
+          when 1 do h5PutArray(fid, fieldName(c), 1, c1, 1, 1, buf);
+          when 2 do h5PutArray(fid, fieldName(c), 2, c2, c1, 1, buf);
+          otherwise do h5PutArray(fid, fieldName(c), 3, c3, c2, c1, buf);
         }
       }
 
       // ---- cell-centre coordinates (1D per axis) ----
       {
-        var c1: [0..#nx1] real = [i in 0..#nx1] x1c(i+1);
-        h5PutArray(fid, "cc_x1", 1, nx1, 1, 1, c1);
-        var c2: [0..#nx2] real = [j in 0..#nx2] x2c(j+1);
-        h5PutArray(fid, "cc_x2", 1, nx2, 1, 1, c2);
-        var c3: [0..#nx3] real = [kk in 0..#nx3] x3c(kk+1);
-        h5PutArray(fid, "cc_x3", 1, nx3, 1, 1, c3);
+        var cc1: [0..#c1] real = [i in 0..#c1] x1c(r1.low + i);
+        h5PutArray(fid, "cc_x1", 1, c1, 1, 1, cc1);
+        var cc2: [0..#c2] real = [j in 0..#c2] x2c(r2.low + j);
+        h5PutArray(fid, "cc_x2", 1, c2, 1, 1, cc2);
+        var cc3: [0..#c3] real = [kk in 0..#c3] x3c(r3.low + kk);
+        h5PutArray(fid, "cc_x3", 1, c3, 1, 1, cc3);
       }
 
       // ---- node coordinates ----
       {
-        var f1: [0..#(nx1+1)] real = [i in 0..#(nx1+1)] x1f(i+1);
-        h5PutArray(fid, "node_x1", 1, nx1+1, 1, 1, f1);
-        var f2: [0..#(nx2+1)] real = [j in 0..#(nx2+1)] x2f(j+1);
-        h5PutArray(fid, "node_x2", 1, nx2+1, 1, 1, f2);
-        var f3: [0..#(nx3+1)] real = [kk in 0..#(nx3+1)] x3f(kk+1);
-        h5PutArray(fid, "node_x3", 1, nx3+1, 1, 1, f3);
+        var f1: [0..#(c1+1)] real = [i in 0..#(c1+1)] x1f(r1.low + i);
+        h5PutArray(fid, "node_x1", 1, c1+1, 1, 1, f1);
+        var f2: [0..#(c2+1)] real = [j in 0..#(c2+1)] x2f(r2.low + j);
+        h5PutArray(fid, "node_x2", 1, c2+1, 1, 1, f2);
+        var f3: [0..#(c3+1)] real = [kk in 0..#(c3+1)] x3f(r3.low + kk);
+        h5PutArray(fid, "node_x3", 1, c3+1, 1, 1, f3);
       }
 
       // ---- mapped node positions for curvilinear meshes (2D/3D) ----
       if geom != Geom.cartesian && ndim >= 2 {
-        const m1 = nx1 + 1,
-              m2 = nx2 + 1,
-              m3 = if act3 then nx3 + 1 else 1;
+        const m1 = c1 + 1,
+              m2 = c2 + 1,
+              m3 = if act3 then c3 + 1 else 1;
         var nbx, nby, nbz: [0..#(m1*m2*m3)] real;
         forall (i, j, k) in {1..m1, 1..m2, 1..m3}
             with (ref nbx, ref nby, ref nbz) {
-          const p = nodePos(i, j, k);
+          const p = nodePos(r1.low + i - 1, r2.low + j - 1, r3.low + k - 1);
           const idx = ((k-1)*m2 + (j-1))*m1 + (i-1);
           nbx[idx] = p(0); nby[idx] = p(1); nbz[idx] = p(2);
         }
