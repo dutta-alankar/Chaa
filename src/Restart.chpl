@@ -7,28 +7,64 @@
  *   - tracer-particle ids and positions,
  *   - the OU forcing amplitudes and the RNG draw count (so the random
  *     sequence resumes exactly where it left off),
- *   - the self-gravity potential (the warm start of the CG solver).
+ *   - the self-gravity potential (the warm start of the CG solver),
+ *   - fingerprints (FNV-1a) of the Chaa binary and of the parameter
+ *     file, so a resume can detect and log that either changed.
  *
- * With the same binary and launch configuration, a run resumed with
- * --restart=true therefore reproduces the uninterrupted run bit for
- * bit, including all subsequent dumps (validated by the `restart-sod`
- * CI case).  The file is written when a graceful stop is requested
- * (`touch <outDir>/stop`) and at every normal end of run.
+ * With the same binary and parameter file, a run resumed with
+ * --restart=true reproduces the uninterrupted run bit for bit,
+ * including all subsequent dumps (validated by the `restart-sod` and
+ * `restart-turbulence` CI cases).  Restart files are written when a
+ * graceful stop is requested (`touch <outDir>/stop`), at every normal
+ * end of run, and every --restartDt of simulation time if given.  Two
+ * generations are kept: the previous restart.chaa is renamed to
+ * restart.bak.chaa before a new one is written.
  */
 module Restart {
   use Params, State, Particles, Forcing, SelfGravity;
-  use IO;
+  use IO, FileSystem;
+  import IniReader;
 
-  param RST_MAGIC = 0x4348414152535431;   // "CHAARST1"
+  param RST_MAGIC = 0x4348414152535432;   // "CHAARST2"
 
   proc restartPath(): string do return outDir + "/restart.chaa";
+  proc backupPath(): string do return outDir + "/restart.bak.chaa";
+
+  /* set from main's args[0]; used to fingerprint the running binary */
+  var exePath = "";
+
+  /* FNV-1a 64-bit hash of a file's contents (0 if unreadable) */
+  proc fileHash(path: string): uint {
+    if path == "" then return 0;
+    var b: bytes;
+    try {
+      var f = open(path, ioMode.r);
+      var r = f.reader(locking=false);
+      b = r.readAll(bytes);
+    } catch {
+      return 0;
+    }
+    var h: uint = 0xcbf29ce484222325;
+    for i in 0..<b.size do
+      h = (h ^ b.byte(i)) * 0x100000001b3;
+    return h;
+  }
+
+  proc binFingerprint(): uint do return fileHash(exePath);
+  proc iniFingerprint(): uint do return fileHash(IniReader.iniPathUsed);
 
   proc writeRestart(t: real, step: int, dumpN: int,
                     nextOut: real) throws {
+    // keep two generations: the previous restart becomes the .bak one
+    if exists(restartPath()) {
+      if exists(backupPath()) then remove(backupPath());
+      rename(restartPath(), backupPath());
+    }
     {
       var f = open(restartPath(), ioMode.cw);
       var w = f.writer(locking=false);
       w.writeBinary(RST_MAGIC);
+      w.writeBinary(binFingerprint()); w.writeBinary(iniFingerprint());
       w.writeBinary(NTOT); w.writeBinary(nx1);
       w.writeBinary(nx2); w.writeBinary(nx3);
       w.writeBinary(t); w.writeBinary(step);
@@ -83,7 +119,23 @@ module Restart {
       var r = f.reader(locking=false);
       var magic, ntot, n1, n2, n3: int;
       if !r.readBinary(magic) || magic != RST_MAGIC then
-        halt("not a Chaa restart file: " + restartPath());
+        halt("not a Chaa restart file (or an old format): " +
+             restartPath());
+      var binH, iniH: uint;
+      r.readBinary(binH); r.readBinary(iniH);
+      const myBin = binFingerprint(), myIni = iniFingerprint();
+      if binH != myBin then
+        writeln("WARNING: the Chaa binary differs from the one that ",
+                "wrote this restart file — the continuation will be ",
+                "correct but may not be bit-identical to the ",
+                "uninterrupted run");
+      if iniH != myIni then
+        writeln("WARNING: the parameter file differs from the one used ",
+                "when this restart file was written — resumed values ",
+                "may not match the original run");
+      if binH == myBin && iniH == myIni then
+        writeln("restart fingerprints match: same Chaa binary and ",
+                "parameter file — continuation is machine-identical");
       r.readBinary(ntot); r.readBinary(n1); r.readBinary(n2);
       r.readBinary(n3);
       if ntot != NTOT || n1 != nx1 || n2 != nx2 || n3 != nx3 then

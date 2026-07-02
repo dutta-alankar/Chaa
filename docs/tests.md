@@ -81,7 +81,7 @@ scalings, analytic steady states or strict symmetry requirements.
 | `selfgrav-kick` | Poisson self-gravity vs the analytic potential (0.08 %) |
 | `sod-stretch-anchor` | uniform-anchor stretched grid: block uniform to round-off, exact GP ratio, exact-solution L1 |
 | `restart-sod` | graceful stop (`touch stop`) + `--restart=true`: every dump **byte-identical** to an uninterrupted run |
-| `restart-turbulence` | the same with OU forcing and tracer particles: the driving RNG sequence and trajectories continue exactly |
+| `restart-turbulence` | the same with OU forcing, tracer particles and periodic `--restartDt` checkpoints (with `.bak` rotation): the driving RNG sequence and trajectories continue exactly |
 
 ## Running locally
 

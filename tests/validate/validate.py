@@ -479,6 +479,8 @@ def _restart_identical(outdir, ext):
           "stop file was removed")
     check(os.path.exists(os.path.join(outdir, "restart.chaa")),
           "restart file present")
+    check(os.path.exists(os.path.join(outdir, "restart.bak.chaa")),
+          "previous restart rotated to restart.bak.chaa")
 
 
 def restart_sod(outdir):

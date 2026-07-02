@@ -93,6 +93,8 @@ One per side: `bcX1min`, `bcX1max`, `bcX2min`, `bcX2max`, `bcX3min`,
 | `outFormats` | `txt` | comma list among `txt`, `vtk`, `hdf5` |
 | `outDt` | `0` | dump interval (≤0: only initial and final states) |
 | `outDir` | `output` | output directory (created if missing) |
+| `restartDt` | `0` | restart-file cadence in simulation time (0: only at the end of the run and on a graceful stop) — see [Stopping & restarting](restart.md) |
+| `restart` | `false` | *(command line only)* resume from `<outDir>/restart.chaa` |
 
 ## Problem-specific parameters
 

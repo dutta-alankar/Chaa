@@ -194,14 +194,19 @@ files live in `src/problems/<problem>_runtime_params.ini`:
 
 `touch <outDir>/stop` stops a running simulation gracefully: it
 finishes the current step, saves `<outDir>/restart.chaa`, removes the
-`stop` file and exits. Resume with the same flags plus
-`--restart=true` — the continuation is **machine-identical** (same
-binary, no recompile): every subsequent dump is byte-for-byte what the
-uninterrupted run would have written, including the turbulence-driving
-random sequence and particle trajectories (enforced by the
-`restart-sod` and `restart-turbulence` CI cases). A restart file is
-also written at every normal end of run, so a finished simulation can
-be continued to a later `--tstop`. Details:
+`stop` file and exits. Restart files are also written at every normal
+end of run and, with `--restartDt=…` (or `restartDt` in the ini file),
+periodically during the run; each write rotates the previous file to
+`restart.bak.chaa`, so the two newest checkpoints are always kept.
+Resume with the same flags plus `--restart=true` — with the same
+binary and parameter file the continuation is **machine-identical**:
+every subsequent dump is byte-for-byte what the uninterrupted run
+would have written, including the turbulence-driving random sequence
+and particle trajectories (enforced by the `restart-sod` and
+`restart-turbulence` CI cases). Restart files carry fingerprints of
+the binary and the parameter file, and the log reports at resume
+whether both still match (a mismatch warns instead of failing).
+Details:
 [Stopping & restarting](https://dutta-alankar.github.io/Chaa/user-guide/restart/).
 
 ### Output formats (`--outFormats=`)

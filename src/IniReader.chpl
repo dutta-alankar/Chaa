@@ -10,6 +10,7 @@ module IniReader {
   import Cli;
 
   var table = new map(string, string);
+  var iniPathUsed = "";      // the parameter file actually read, if any
 
   proc loadIni() {
     const explicit = !Cli.isUnset(Cli.paramsFile);
@@ -21,6 +22,7 @@ module IniReader {
         halt("parameter file not found: " + path);
       return;                       // optional default file is absent: fine
     }
+    iniPathUsed = path;
     var text: string;
     try! {
       var f = open(path, ioMode.r);

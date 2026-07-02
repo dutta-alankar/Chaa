@@ -96,6 +96,9 @@ module Params {
   const nParticles = valI(Cli.nParticles, "nParticles", 0);
   const partSeed   = valI(Cli.partSeed, "partSeed", 4321);
   const partRingR  = valR(Cli.partRingR, "partRingR", 0.0);
+  // periodic restart dumps (simulation-time cadence; 0 = only at the
+  // end of the run and on a graceful stop)
+  const restartDt  = valR(Cli.restartDt, "restartDt", 0.0);
   // self-gravity (Poisson: lap(Phi) = sgFourPiG * rho)
   const sgFourPiG = valR(Cli.sgFourPiG, "sgFourPiG", 0.0);
   const sgTol     = valR(Cli.sgTol, "sgTol", 1.0e-8);

@@ -104,7 +104,8 @@ module Chaa {
       halt("spherical: theta must lie in [0, pi]");
   }
 
-  proc main() {
+  proc main(args: [] string) {
+    Restart.exePath = args[0];
     printBanner();
     sanityChecks();
     if !(try! exists(outDir)) then try! mkdir(outDir, parents=true);
@@ -135,6 +136,10 @@ module Chaa {
       writeOutputs(dumpN, t);
       dumpN += 1;
     }
+    // periodic restart dumps: next multiple of restartDt after t
+    var nextRst = if restartDt > 0.0
+                  then restartDt*(floor(t/restartDt) + 1.0)
+                  else 0.0;
 
     var stopped = false;
     var dt = computeDt();
@@ -160,6 +165,11 @@ module Chaa {
         writeOutputs(dumpN, t);
         dumpN += 1;
         nextOut += outDt;
+      }
+      if restartDt > 0.0 && t >= nextRst - 1.0e-12 &&
+         t < tstop*(1.0 - 1.0e-12) {
+        try! writeRestart(t, step, dumpN, nextOut);
+        nextRst += restartDt;
       }
       /* graceful stop: `touch <outDir>/stop` finishes this step, saves
          a restart file, removes the stop file and exits */

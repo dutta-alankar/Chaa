@@ -83,6 +83,8 @@ module Cli {
   /* resume from <outDir>/restart.chaa (CLI-only; see the docs'
      "Stopping & restarting" page) */
   config const restart = false;
+  // periodic restart-dump cadence in simulation time (0 = off)
+  config const restartDt = UNSET_R;
 
   /* --- problem-specific parameters --- */
   config const sodX0 = UNSET_R;
