@@ -61,7 +61,12 @@ cmake -B build && cmake --build build
 ```
 
 gives a Sedov–Taylor blast whose shock lands within 0.5 % of the
-analytic similarity solution.
+analytic similarity solution:
+
+![Sedov density profile on the analytic similarity shock radius](assets/plots/sedov1d-radius.png)
+
+(plotted with the bundled `tools/plot_compare.py` — every test problem
+has [a figure like this](test-problems.md).)
 
 ## Provenance
 

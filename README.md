@@ -258,6 +258,19 @@ similarity solution in 1D spherical and 0.01 % aspherical in (R,z);
 Taylor–Couette steady profile within 0.35 % of analytic; 3D spherical
 Sedov shock radius independent of angle to machine precision.
 
+## A look at the results
+
+All figures below (and the full per-problem gallery in the
+[documentation](https://dutta-alankar.github.io/Chaa/test-problems/))
+are produced by the bundled python tools from the CI test cases —
+regenerate everything with `tools/make_gallery.sh`.
+
+| | |
+|---|---|
+| ![Sod vs exact](docs/assets/plots/sod-vs-exact.png) *Sod shock tube on the exact Riemann solution* | ![Sedov radius](docs/assets/plots/sedov1d-radius.png) *Sedov blast peak on the similarity shock radius* |
+| ![Kelvin–Helmholtz](docs/assets/plots/kh-fields.png) *Kelvin–Helmholtz billows with the tracer dye* | ![3D Sedov slice](docs/assets/plots/sedov3d-slice.png) *3D Sedov, mid-plane slice* |
+| ![Taylor–Couette](docs/assets/plots/taylor-couette-profile.png) *Viscous Couette flow on the analytic profile* | ![Epicycle](docs/assets/plots/epicycle-oscillation.png) *Shearing-box epicyclic oscillation on A·cos(κt)* |
+
 ## Plotting & analysis
 
 `tools/` ships python scripts that read any Chaa output (txt, HDF5,

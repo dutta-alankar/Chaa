@@ -25,13 +25,23 @@ python tools/plot_fields.py output/ --dumps 0,5,9 --save fig.png
 - **2D** runs: pseudocolor maps in physical coordinates — curvilinear
   meshes (annuli, wedges, shells) are drawn *mapped*, using the node
   positions stored in the dumps;
-- **3D** runs: mid-plane slices;
+- **3D** runs: **slice plots** — the x3 mid-plane by default, any
+  axis/position with `--slice x1|x2|x3[,frac]`
+  (e.g. `--slice x1,0.75` cuts the plane at 75 % of the x1 extent);
 - tracer **particles**, when present, are overplotted on Cartesian 2D
   maps.
 
 Options: `--dumps n0,n1,…` (default first,last), `--fields …` (default
 `rho,prs` + `vx1` in 1D), `--log field,…`, `--cmap name`,
-`--save file.png`.
+`--slice …` (3D), `--save file.png`.
+
+![2D polar blast drawn on the physically mapped annulus](../assets/plots/blast-polar-fields.png)
+*`plot_fields.py` on a 2D polar run: the mesh is drawn physically
+mapped, so the annulus (and the circular blast in it) look right.*
+
+![3D Sedov sliced off-centre with --slice](../assets/plots/sedov3d-slice-x1.png)
+*A 3D run sliced off-centre with `--slice x1,0.75`: the plane cuts the
+spherical shock shell in a smaller ring, as it should.*
 
 ## `plot_compare.py` — check against the analytic estimate
 
@@ -63,6 +73,18 @@ defaults — `python tools/plot_compare.py --help` lists them. The
 analytic solutions are the same modules the CI validators use
 (`tests/validate/exact_riemann.py`, `common.py`), so the plots show
 exactly what CI checks.
+
+![Sod solution over the exact Riemann solution](../assets/plots/sod-vs-exact.png)
+*`plot_compare.py sod`: simulation points over the exact solution, the
+L1 error in the title.*
+
+The whole figure gallery used across this documentation (one plot per
+test problem, comparisons and field maps) lives in `docs/assets/plots/`
+and is regenerated from scratch — runs included — by
+
+```sh
+PY=/path/to/python tools/make_gallery.sh
+```
 
 ## Programmatic access
 
