@@ -12,9 +12,10 @@
  */
 module Chaa {
   use Params, Grid, State, Eos, Hydro, Boundary, Problems, Evolve, Output;
-  use Forcing, Particles, SelfGravity, Fargo;
+  use Forcing, Particles, SelfGravity, Fargo, Restart;
   use Logo;
   use Time, FileSystem, Math;
+  import Cli;
 
   proc printBanner() {
     printLogo();
@@ -125,9 +126,17 @@ module Chaa {
     var sw: stopwatch;
     sw.start();
 
-    writeOutputs(dumpN, t);
-    dumpN += 1;
+    if Cli.restart {
+      try! readRestart(t, step, dumpN, nextOut);
+      applyFloorsAndPrims();
+      problemInternalBC(t);
+      applyBCs(t);
+    } else {
+      writeOutputs(dumpN, t);
+      dumpN += 1;
+    }
 
+    var stopped = false;
     var dt = computeDt();
     while t < tstop*(1.0 - 1.0e-12) && step < maxSteps {
       dt = min(dt, tstop - t);
@@ -152,9 +161,22 @@ module Chaa {
         dumpN += 1;
         nextOut += outDt;
       }
+      /* graceful stop: `touch <outDir>/stop` finishes this step, saves
+         a restart file, removes the stop file and exits */
+      if (try! exists(outDir + "/stop")) {
+        try! writeRestart(t, step, dumpN, nextOut);
+        try! remove(outDir + "/stop");
+        writeln("stop requested: state saved after step ", step,
+                " (t = ", t, "); resume with --restart=true");
+        stopped = true;
+        break;
+      }
     }
 
-    writeOutputs(dumpN, t);
+    if !stopped {
+      writeOutputs(dumpN, t);
+      try! writeRestart(t, step, dumpN + 1, nextOut);
+    }
     sw.stop();
 
     const ncells = nx1*nx2*nx3;

@@ -452,6 +452,45 @@ def vortex_particles_ring(outdir):
     check(err.mean() < 0.3, "rotation matches the analytic rate")
 
 
+def _restart_identical(outdir, ext):
+    """stopped+resumed dumps must equal the uninterrupted -ref run."""
+    ref = outdir + "-ref"
+    fa = sorted(f for f in glob.glob(os.path.join(outdir, f"*.{ext}"))
+                if ".particles." not in f)
+    fb = sorted(f for f in glob.glob(os.path.join(ref, f"*.{ext}"))
+                if ".particles." not in f)
+    check(len(fa) == len(fb) and len(fa) >= 4,
+          f"same dump count ({len(fa)} vs {len(fb)})")
+    for a, b in zip(fa, fb):
+        if ext == "txt":
+            same = np.array_equal(np.loadtxt(a), np.loadtxt(b))
+        else:
+            da, db = load_h5(a), load_h5(b)
+            same = set(da) == set(db) and \
+                all(np.array_equal(da[k], db[k]) for k in da)
+        check(same, f"{os.path.basename(a)} identical to reference")
+    pa = sorted(glob.glob(os.path.join(outdir, "*.particles.*.txt")))
+    pb = sorted(glob.glob(os.path.join(ref, "*.particles.*.txt")))
+    check(len(pa) == len(pb), "same particle dump count")
+    for a, b in zip(pa, pb):
+        check(np.array_equal(np.loadtxt(a), np.loadtxt(b)),
+              f"{os.path.basename(a)} identical to reference")
+    check(not os.path.exists(os.path.join(outdir, "stop")),
+          "stop file was removed")
+    check(os.path.exists(os.path.join(outdir, "restart.chaa")),
+          "restart file present")
+
+
+def restart_sod(outdir):
+    """graceful stop + resume reproduces the uninterrupted run exactly"""
+    _restart_identical(outdir, "txt")
+
+
+def restart_turbulence(outdir):
+    """restart with OU forcing (RNG fast-forward) + tracer particles"""
+    _restart_identical(outdir, "h5")
+
+
 REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                    "reference")
 
@@ -593,6 +632,8 @@ CASES = {
     "turbulence-2d": turbulence_2d,
     "vortex-particles": vortex_particles,
     "vortex-particles-ring": vortex_particles_ring,
+    "restart-sod": restart_sod,
+    "restart-turbulence": restart_turbulence,
     "ref-sod-idefix": ref_sod_idefix,
     "ref-sodiso-idefix": ref_sodiso_idefix,
     "ref-machref-idefix": ref_machref_idefix,

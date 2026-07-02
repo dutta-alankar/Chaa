@@ -30,8 +30,24 @@ run_one() {
   echo "=== running $case ==="
   # run from the repo root so relative --paramsFile paths resolve
   cd "$HERE"
-  # shellcheck disable=SC2086
-  "$CHAA_BIN" $flags --outDir="$out" --logEvery=1000000000
+  if [[ "$case" == restart-* ]]; then
+    # graceful-stop/restart cases: (1) run with a pre-planted stop file
+    # so the run saves a restart after step 1 and exits, (2) resume it,
+    # (3) run uninterrupted into <case>-ref; the validator requires
+    # machine-identical dumps.
+    touch "$out/stop"
+    # shellcheck disable=SC2086
+    "$CHAA_BIN" $flags --outDir="$out" --logEvery=1000000000
+    # shellcheck disable=SC2086
+    "$CHAA_BIN" $flags --outDir="$out" --restart=true --logEvery=1000000000
+    rm -rf "$out-ref"
+    mkdir -p "$out-ref"
+    # shellcheck disable=SC2086
+    "$CHAA_BIN" $flags --outDir="$out-ref" --logEvery=1000000000
+  else
+    # shellcheck disable=SC2086
+    "$CHAA_BIN" $flags --outDir="$out" --logEvery=1000000000
+  fi
   "$PY" "$HERE/tests/validate/validate.py" "$case" "$out"
 }
 

@@ -186,9 +186,23 @@ any key can still be overridden per-run on the command line:
 
 Boundary conditions per side (`--bcX1min=…` etc.): `periodic`,
 `zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`,
-`inflow-diode`, `userdef`. Per-problem parameter files live in
-`src/problems/<problem>_runtime_params.ini`:
+`inflow-diode`, `shear-periodic`, `userdef`. Per-problem parameter
+files live in `src/problems/<problem>_runtime_params.ini`:
 `./build/bin/chaa --paramsFile=src/problems/cloud_runtime_params.ini`.
+
+### Stopping & restarting
+
+`touch <outDir>/stop` stops a running simulation gracefully: it
+finishes the current step, saves `<outDir>/restart.chaa`, removes the
+`stop` file and exits. Resume with the same flags plus
+`--restart=true` — the continuation is **machine-identical** (same
+binary, no recompile): every subsequent dump is byte-for-byte what the
+uninterrupted run would have written, including the turbulence-driving
+random sequence and particle trajectories (enforced by the
+`restart-sod` and `restart-turbulence` CI cases). A restart file is
+also written at every normal end of run, so a finished simulation can
+be continued to a later `--tstop`. Details:
+[Stopping & restarting](https://dutta-alankar.github.io/Chaa/user-guide/restart/).
 
 ### Output formats (`--outFormats=`)
 

@@ -80,6 +80,8 @@ scalings, analytic steady states or strict symmetry requirements.
 | `disk-cavity-fargo` | FARGO orbital advection preserves the disk equilibrium |
 | `selfgrav-kick` | Poisson self-gravity vs the analytic potential (0.08 %) |
 | `sod-stretch-anchor` | uniform-anchor stretched grid: block uniform to round-off, exact GP ratio, exact-solution L1 |
+| `restart-sod` | graceful stop (`touch stop`) + `--restart=true`: every dump **byte-identical** to an uninterrupted run |
+| `restart-turbulence` | the same with OU forcing and tracer particles: the driving RNG sequence and trajectories continue exactly |
 
 ## Running locally
 

@@ -23,12 +23,27 @@ module Forcing {
   var am2: [0..#maxModes] real;
 
   var rng = new randomStream(real, seed = forceSeed);
+  var nDraws = 0;      // draws taken so far (saved/replayed on restart)
+
+  inline proc draw(): real {
+    nDraws += 1;
+    return rng.next();
+  }
 
   // Irwin-Hall approximation to a unit normal (good enough for driving)
   proc gauss(): real {
     var s = 0.0;
-    for 1..12 do s += rng.next();
+    for 1..12 do s += draw();
     return s - 6.0;
+  }
+
+  /* restore the OU state from a restart file: amplitudes back, RNG
+     fast-forwarded to the saved draw count so the random sequence
+     continues exactly where the stopped run left off */
+  proc restoreForcing(a1: [] real, a2: [] real, draws: int) {
+    if forceAmp <= 0.0 then return;
+    for m in 0..#nModes { am1[m] = a1[m]; am2[m] = a2[m]; }
+    while nDraws < draws do draw();
   }
 
   proc initForcing() {
@@ -66,7 +81,7 @@ module Forcing {
           kv[nModes] = k;
           e1v[nModes] = e1;
           e2v[nModes] = e2;
-          phs[nModes] = 2.0*pi*rng.next();
+          phs[nModes] = 2.0*pi*draw();
           nModes += 1;
         }
       }

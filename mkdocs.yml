@@ -58,6 +58,7 @@ nav:
       - Tracer particles: user-guide/particles.md
       - Output & visualisation: user-guide/output.md
       - Plotting & analysis: user-guide/plotting.md
+      - Stopping & restarting: user-guide/restart.md
       - Running in parallel: user-guide/parallel.md
   - Set up your own problem: custom-problem.md
   - Architecture & code flow: architecture.md

@@ -80,6 +80,9 @@ module Cli {
   config const outDt = UNSET_R;
   config const outFormats = UNSET_S, outDir = UNSET_S;
   config const logEvery = UNSET_I;
+  /* resume from <outDir>/restart.chaa (CLI-only; see the docs'
+     "Stopping & restarting" page) */
+  config const restart = false;
 
   /* --- problem-specific parameters --- */
   config const sodX0 = UNSET_R;

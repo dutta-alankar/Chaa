@@ -84,6 +84,18 @@ module Particles {
     }
   }
 
+  /* rebuild the bags from a restart file: ids + positions, scattered
+     to the owning locales exactly like initParticles */
+  proc restoreParticles(ids: [] int, pos: [] 3*real) {
+    if nParticles <= 0 then return;
+    coforall loc in Locales do on loc {
+      bag[here.id].clear();
+      for n in ids.domain do
+        if ownerOf(pos[n]) == here.id then
+          bag[here.id].pushBack(new TracerParticle(ids[n], pos[n]));
+    }
+  }
+
   inline proc centerOf(dir: int, q: int): real {
     if dir == 0 then return x1c(q);
     if dir == 1 then return x2c(q);

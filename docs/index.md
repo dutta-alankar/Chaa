@@ -39,8 +39,10 @@ the hood.
 - **Output for real workflows** — ASCII tables (1D), legacy VTK, and
   HDF5 with XDMF companions that load directly into ParaView and VisIt;
   bundled python tools for
-  [field plots and analytic comparisons](user-guide/plotting.md).
-- **Validated, continuously** — 45 test cases (Sod, Sedov–Taylor,
+  [field plots and analytic comparisons](user-guide/plotting.md);
+  [graceful stop + machine-identical restart](user-guide/restart.md)
+  (`touch <outDir>/stop`, resume with `--restart=true`).
+- **Validated, continuously** — 47 test cases (Sod, Sedov–Taylor,
   blast waves, double Mach reflection, Kelvin–Helmholtz,
   Rayleigh–Taylor, isentropic vortex, Taylor–Couette, flow past a
   cylinder, thermal diffusion, rotating disks, shearing boxes,

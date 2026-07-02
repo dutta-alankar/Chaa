@@ -96,6 +96,8 @@ jobs:
           - turbulence-2d
           - vortex-particles
           - vortex-particles-ring
+          - restart-sod
+          - restart-turbulence
           - ref-sod-idefix
           - ref-sodiso-idefix
           - ref-machref-idefix
