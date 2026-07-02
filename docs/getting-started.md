@@ -8,6 +8,7 @@
 | CMake ≥ 3.16 | build orchestration | `brew install cmake` / `apt install cmake` |
 | libhdf5 *(optional)* | HDF5 output | `brew install hdf5` / `apt install libhdf5-dev` |
 | python3 + numpy + h5py *(optional)* | test-suite validation | `pip install numpy h5py` |
+| \+ matplotlib *(optional)* | the bundled [plotting tools](user-guide/plotting.md) | `pip install matplotlib` |
 
 ## Build
 

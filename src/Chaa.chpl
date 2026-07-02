@@ -139,7 +139,7 @@ module Chaa {
         applyFloorsAndPrims();
         applyBCs(t + dt);
       }
-      advanceParticles(dt);
+      advanceParticles(dt, t);
       t += dt;
       step += 1;
       if step % logEvery == 0 then

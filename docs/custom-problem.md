@@ -148,7 +148,32 @@ reusing them keeps the namespace small.
   diffused with `--scDiff`, and written as `sc0…` in every output.
 - Lagrangian tracer particles need no problem code at all:
   `--nParticles=N` scatters them uniformly and writes
-  `<problem>.particles.NNNN.txt` beside every dump.
+  `<problem>.particles.NNNN.txt` beside every dump. To seed them
+  yourself, give your module a `particleInit` hook and register it in
+  `Problems.problemParticleInit` (return `false` to fall back to the
+  random scatter):
+  ```chapel
+  // in src/problems/Blob.chpl — a line of tracers across the wind
+  proc particleInit(ref pos: [?D] 3*real): bool {
+    for p in D do
+      pos[p] = (cen1, -1.0 + 2.0*(p + 0.5)/D.size, 0.0);
+    return true;
+  }
+  ```
+  ```chapel
+  // in src/Problems.chpl
+  proc problemParticleInit(ref pos: [] 3*real): bool {
+    select problem {
+      when "blob" do return Blob.particleInit(pos);
+      otherwise do return false;
+    }
+  }
+  ```
+  (`IsentropicVortex.particleInit` is a working example: with
+  `--partRingR > 0` it puts the tracers on a ring around the vortex —
+  validated by the `vortex-particles-ring` CI case.) Particles are
+  automatically distributed across locales by position and migrate as
+  they move; see [Tracer particles](user-guide/particles.md).
 
 ## Step 7 — custom forces and potentials (optional)
 

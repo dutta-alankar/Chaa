@@ -55,6 +55,7 @@ module Cli {
   config const forceSeed = UNSET_I;
   // Lagrangian tracer particles
   config const nParticles = UNSET_I, partSeed = UNSET_I;
+  config const partRingR = UNSET_R;    // vortex ring seeding (example hook)
   // self-gravity: 4*pi*G normalisation (>0 enables the Poisson solve)
   config const sgFourPiG = UNSET_R, sgTol = UNSET_R;
   config const sgMaxIter = UNSET_I;

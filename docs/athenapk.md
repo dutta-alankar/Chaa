@@ -10,7 +10,7 @@ to use it, and what is explicitly out of scope.
 | AthenaPK | Chaa | notes |
 |---|---|---|
 | passive scalars (`nscalars`) | `-DCHAA_NSCAL=n` tracer fields | ride in the state vector; upwinded on the mass flux; bounded (validated on the Sod contact and cloud tests) |
-| tracer particles | `--nParticles=…` | RK2 advection in the interpolated velocity field, any grid law, periodic wrapping; written beside every dump |
+| tracer particles (swarms) | `--nParticles=…` | RK2 advection in the interpolated velocity field, any grid law, periodic/shear-periodic wrapping; **fully distributed** like Parthenon swarms (owner-computes with inter-locale migration); problem-defined seeding via the `problemParticleInit` hook |
 | (tabulated) cooling, Townsend integration | `--coolLambda0, --coolAlpha, --coolTfloor` | power-law Λ(T)=Λ₀Tᵅ with the **exact** Townsend (2009) integration, operator split — matches the analytic solution to round-off in the `cooling-box` test |
 | turbulence driver (spectral OU forcing) | `--forceAmp, --forceTcorr, --forceKmin/Kmax, --forceSeed` | solenoidal modes with Ornstein-Uhlenbeck temporal correlation (`src/Forcing.chpl`) |
 | WENO-Z reconstruction | `--recon=wenoz` | Borges et al. (2008), 5-point stencil |

@@ -3,7 +3,7 @@
 [![CI](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml/badge.svg)](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml)
 [![docs](https://github.com/dutta-alankar/Chaa/actions/workflows/docs.yml/badge.svg)](https://dutta-alankar.github.io/Chaa/)
 
-**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide (grid, physics modules, boundaries, particles), architecture walkthrough, per-test results, cross-code validation, and a step-by-step guide to setting up your own problems.
+**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide (grid, physics modules, boundaries, particles, plotting tools, running in parallel), architecture walkthrough, benchmarks, per-test results, cross-code validation, and a step-by-step guide to setting up your own problems.
 
 Chaa is **cross-validated against Idefix and AthenaPK**: matched-configuration runs agree to L1 = 2.7×10⁻⁴ on Sod (vs 1.6×10⁻³ to the exact solution), 0.31 % on the double Mach reflection field, and 3×10⁻⁴ on the 3D Sedov radial profile — frozen reference profiles are re-checked in CI (`tests/reference/`).
 
@@ -97,7 +97,11 @@ message-passing logic. The same binary runs
 - distributed across nodes (`CHPL_COMM=gasnet`, launched with `-nl N`),
 
 with no change to the numerics — that is the performance portability the
-code is built around.
+code is built around. This is verified, not assumed: a 4-locale run
+reproduces the single-locale fields to machine precision and particle
+trajectories to 10⁻¹², at ~90 % strong-scaling efficiency of the
+distributed code path (see
+[Benchmarks](https://dutta-alankar.github.io/Chaa/benchmarks/)).
 
 ## Numerics
 
@@ -110,8 +114,8 @@ code is built around.
 | equation of state | ideal gas; (locally) isothermal (`--eos=isothermal`, cs ∝ R^slope) |
 | source terms      | well-balanced curvilinear geometry; uniform, central point-mass and **self-gravity** (Poisson/CG); shearing box (+shear-periodic BCs); **FARGO orbital advection**; optically thin cooling (exact Townsend); OU turbulence driving; custom body-force hook |
 | diffusion         | explicit viscosity (full tensor in Cartesian, τ<sub>Rφ</sub> in cylindrical/polar); thermal conduction; passive-scalar diffusion |
-| tracers           | passive scalar fields (`-DCHAA_NSCAL`, bounded, upwinded on the mass flux); Lagrangian tracer particles (`--nParticles`) |
-| boundaries        | `periodic`, `zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`, `inflow-diode`, `userdef` |
+| tracers           | passive scalar fields (`-DCHAA_NSCAL`, bounded, upwinded on the mass flux); **fully distributed** Lagrangian tracer particles (`--nParticles`, owner-computes with inter-locale migration, problem-defined seeding via the `problemParticleInit` hook) |
+| boundaries        | `periodic`, `zero-gradient`, `reflect`, `axis`, `inflow`, `outflow-diode`, `inflow-diode`, `shear-periodic`, `userdef` |
 | positivity        | density/pressure floors, per-face reconstruction fallbacks       |
 
 The `limo3`/`ppm` reconstructions, RK family and grid laws mirror
@@ -233,6 +237,12 @@ suite) are built in, validated quantitatively in CI on every push:
 | `cloud-wind` | AthenaPK cloud-in-wind | 2D | bounded tracer dye, diode BCs, surviving core |
 | `turbulence-2d` | OU-driven turbulence | 2D | v_rms target, dye mixing |
 | `vortex-particles` | Lagrangian tracers | 2D | particles return after one period |
+| `vortex-particles-ring` | `problemParticleInit` hook | 2D | ring-seeded tracers keep radius (0.4 %), rotate at the analytic rate (~2 %) |
+| `sod-stretch-anchor` | uniform-anchor stretched grid | 1D | anchor block uniform to round-off, exact GP ratio, exact-solution L1 |
+| `epicycle-shearbox`, `epicycle-fargo` | shearing box (+FARGO) | 2D | epicyclic frequency κ=√(2(2−q))Ω to **five digits** |
+| `disk-cavity-fargo` | FARGO orbital advection | 2D polar | Keplerian disk equilibrium preserved |
+| `selfgrav-kick` | Poisson self-gravity | 1D | acceleration vs the analytic potential, 0.08 % |
+| `ref-sod-idefix`, `ref-sodiso-idefix`, `ref-machref-idefix`, `ref-sedov3d-idefix`, `ref-sod-athenapk` | **cross-code validation** | 1D–3D | matched-configuration agreement with frozen Idefix/AthenaPK profiles (L1 down to 2.7e-4) |
 
 Run them locally:
 
@@ -248,6 +258,41 @@ similarity solution in 1D spherical and 0.01 % aspherical in (R,z);
 Taylor–Couette steady profile within 0.35 % of analytic; 3D spherical
 Sedov shock radius independent of angle to machine precision.
 
+## Plotting & analysis
+
+`tools/` ships python scripts that read any Chaa output (txt, HDF5,
+multi-locale piece files — reassembled transparently):
+
+```sh
+python tools/plot_fields.py test-output/sedov-2d-cyl --log rho  # initial vs final fields
+python tools/plot_compare.py sod test-output/sod-1d-cart        # overlay on the exact solution
+```
+
+`plot_compare.py` knows the analytic references for Sod (exact Riemann,
+ideal and isothermal), Sedov (similarity radius), Taylor–Couette,
+conduction decay, Townsend cooling, linear waves, the vortex and the
+epicyclic oscillation — the same solutions the CI validators check.
+`tools/chaa_io.py` is an importable reader for custom analysis. See the
+[plotting guide](https://dutta-alankar.github.io/Chaa/user-guide/plotting/).
+
+## Benchmarks
+
+Measured with `tools/bench.sh` (3D Sedov, no I/O) on an 8-core
+Apple-silicon laptop (4 performance + 4 efficiency cores), Chapel 2.8:
+
+| scaling | result |
+|---|---|
+| threads (strong, 128³) | 2.50 → 4.95 → 8.05 Mcell/s at 1→2→4 threads (99 %/81 % efficiency; the 4 E-cores add nothing to this bandwidth-bound kernel) |
+| threads (weak, 64³/thread) | 96 % at 2, 76 % at 4 threads |
+| locales (strong, gasnet-smp, fixed 8 threads total) | 5.56 → 5.35 → 4.98 Mcell/s at 1→2→4 locales — **96 %/90 % efficiency**, i.e. ~10 % total cost for distributing the box |
+| multi-locale correctness | 4-locale fields match 1-locale to 2.6e-15; particle trajectories to 1e-12 |
+
+The multi-locale numbers use GASNet's shared-memory conduit on one
+node, so they measure the *overhead* of the distributed code path
+(halo exchanges, remote-capable array access), not network scaling —
+details and tables in the
+[benchmarks page](https://dutta-alankar.github.io/Chaa/benchmarks/).
+
 ## Layout
 
 ```
@@ -256,19 +301,27 @@ src/compile_params.chpl   compile-time parameters (config params)
 src/Cli.chpl              command-line layer (config consts + sentinels)
 src/IniReader.chpl        runtime_params.ini parser
 src/Params.chpl           effective parameters (CLI > ini > default)
-src/Grid.chpl             closed-form mesh + curvilinear metric factors
+src/Grid.chpl             closed-form mesh (4 grid laws) + metric factors
 src/State.chpl            StencilDist-distributed field arrays
-src/Eos.chpl              gamma-law EOS, prim<->cons
-src/Recon.chpl            slope-limited reconstruction
-src/Riemann.chpl          LLF / HLL / HLLC / exact
-src/Hydro.chpl            sweeps, geometric sources, viscosity, gravity, CFL
-src/Boundary.chpl         ghost-cell boundary conditions
-src/Problems.chpl         problem registry/dispatcher
+src/Eos.chpl              gamma-law / isothermal EOS, prim<->cons
+src/Recon.chpl            constant/PLM/LimO3/PPM/WENO-Z reconstruction
+src/Riemann.chpl          LLF / HLL / HLLC / exact (+ tracer upwinding)
+src/Hydro.chpl            sweeps, geometric sources, diffusion, gravity, CFL
+src/Evolve.chpl           SSP RK / VL2 stepping, floors, cooling
+src/Boundary.chpl         ghost-cell boundary conditions (incl. shear-periodic)
+src/SelfGravity.chpl      Poisson solver (CG on the FV metric Laplacian)
+src/Fargo.chpl            FARGO orbital advection (comoving flux + remap)
+src/Forcing.chpl          Ornstein-Uhlenbeck spectral turbulence driving
+src/Particles.chpl        distributed Lagrangian tracer particles
+src/Problems.chpl         problem registry/dispatcher (+ body-force,
+                          particle-init hooks)
 src/problems/*.chpl       one file per test problem (IC + user BCs)
-src/Evolve.chpl           SSP Runge-Kutta stepping
-src/Output.chpl           txt / VTK / XDMF writers
+src/problems/*_runtime_params.ini   canonical per-problem configurations
+src/Output.chpl           txt / VTK / XDMF writers, parallel piece output
 src/Hdf5IO.chpl           minimal HDF5 bindings + writer
+src/Logo.chpl             the tea, served at startup
 src/Chaa.chpl             driver
+tools/                    plotting/analysis scripts + benchmark driver
 ```
 
 Adding a problem = one new file in `src/problems/` with a `setup()` proc

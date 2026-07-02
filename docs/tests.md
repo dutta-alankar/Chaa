@@ -68,6 +68,7 @@ scalings, analytic steady states or strict symmetry requirements.
 | `cloud-wind` | wind-cloud problem: tracer dye bounded, diode boundaries, dense core survives |
 | `turbulence-2d` | OU spectral driving to v_rms ≈ 1, dye mixing |
 | `vortex-particles` | Lagrangian tracers return to their start after one vortex period |
+| `vortex-particles-ring` | the `problemParticleInit` hook: ring-seeded tracers keep radius (0.4 %) and rotate at the analytic rate (~2 %) |
 
 ## Cross-code references & new physics
 
@@ -90,3 +91,9 @@ PY=/path/to/python tests/run_case.sh all    # custom python (needs numpy, h5py)
 
 Case definitions are one line each in `tests/cases.conf`; validators
 live in `tests/validate/validate.py`.
+
+Every finished case can be inspected graphically with the bundled
+tools — `python tools/plot_fields.py test-output/<case>` for the
+fields, `python tools/plot_compare.py <kind> test-output/<case>` for an
+overlay on the analytic solution where one exists (see
+[Plotting & analysis](user-guide/plotting.md)).

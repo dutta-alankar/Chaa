@@ -58,6 +58,17 @@ module Problems {
     return (0.0, 0.0, 0.0);
   }
 
+  /* optional problem-defined particle initial positions: fill pos with
+     one (x1,x2,x3) tuple per particle and return true; return false to
+     get the default uniform random scatter over the whole domain.
+     See the docs' custom-problem guide for a worked example. */
+  proc problemParticleInit(ref pos: [] 3*real): bool {
+    select problem {
+      when "vortex" do return IsentropicVortex.particleInit(pos);
+      otherwise do return false;
+    }
+  }
+
   proc problemInternalBC(t: real) {
     select problem {
       when "cylinderFlow" do CylinderFlow.internalBC(t);

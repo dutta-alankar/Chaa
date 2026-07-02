@@ -95,6 +95,7 @@ jobs:
           - cloud-wind
           - turbulence-2d
           - vortex-particles
+          - vortex-particles-ring
           - ref-sod-idefix
           - ref-sodiso-idefix
           - ref-machref-idefix

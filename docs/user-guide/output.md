@@ -52,3 +52,11 @@ with h5py.File("results/blast.0003.h5") as f:
     HDF5 support is compiled in by default (`-DCHAA_HDF5=ON`) and links
     against `libhdf5`. A binary built with `-DCHAA_HDF5=OFF` reports a
     clear error if `hdf5` output is requested.
+
+## Reading dumps back
+
+Beyond ParaView/VisIt, the bundled python tools read every format
+(including multi-locale piece files, reassembled transparently):
+`tools/plot_fields.py` for quick looks, `tools/plot_compare.py` for
+overlays on analytic solutions, and `tools/chaa_io.py` as an importable
+reader — see [Plotting & analysis](plotting.md).

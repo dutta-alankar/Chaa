@@ -421,6 +421,37 @@ def vortex_particles(outdir):
     check(dist.mean() < 1.0, "particles return after one period")
 
 
+def vortex_particles_ring(outdir):
+    """problemParticleInit hook: ring-seeded tracers rotate with the vortex.
+
+    Fluid elements at radius R of the (advected) isentropic vortex stay
+    on the circle and rotate at the analytic angular rate
+    w(R) = beta/(2 pi) exp((1-R^2)/2); after one advection period the
+    vortex centre is back at (5,5), so the ring must be back around it,
+    radius-preserving, rotated by w*t.
+    """
+    pf = sorted(glob.glob(os.path.join(outdir, "*.particles.*.txt")))
+    p0 = np.loadtxt(pf[0])
+    p1 = np.loadtxt(pf[-1])
+    r0 = np.sqrt((p0[:, 1] - 5.0) ** 2 + (p0[:, 2] - 5.0) ** 2)
+    r1 = np.sqrt((p1[:, 1] - 5.0) ** 2 + (p1[:, 2] - 5.0) ** 2)
+    th0 = np.arctan2(p0[:, 2] - 5.0, p0[:, 1] - 5.0)
+    th1 = np.arctan2(p1[:, 2] - 5.0, p1[:, 1] - 5.0)
+    dth = np.unwrap(th1 - th0)
+    dth = np.mod(dth, 2 * np.pi)
+    beta, R, t = 5.0, 1.5, 10.0
+    w_ana = beta / (2 * np.pi) * np.exp(0.5 * (1 - R * R))
+    ana = np.mod(w_ana * t, 2 * np.pi)
+    err = np.abs(np.mod(dth - ana + np.pi, 2 * np.pi) - np.pi)
+    print(f"  seeded radii {r0.min():.6f}..{r0.max():.6f} (want 1.5); "
+          f"final radius {r1.mean():.3f} +- {r1.std():.3f}; "
+          f"rotation {dth.mean():.3f} rad vs analytic {ana:.3f}")
+    check(len(p0) == 64, "all particles present")
+    check(np.abs(r0 - 1.5).max() < 1e-9, "hook seeded the ring exactly")
+    check(np.abs(r1 - R).mean() < 0.1, "ring radius preserved")
+    check(err.mean() < 0.3, "rotation matches the analytic rate")
+
+
 REF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                    "reference")
 
@@ -561,6 +592,7 @@ CASES = {
     "cloud-wind": cloud_wind,
     "turbulence-2d": turbulence_2d,
     "vortex-particles": vortex_particles,
+    "vortex-particles-ring": vortex_particles_ring,
     "ref-sod-idefix": ref_sod_idefix,
     "ref-sodiso-idefix": ref_sodiso_idefix,
     "ref-machref-idefix": ref_machref_idefix,

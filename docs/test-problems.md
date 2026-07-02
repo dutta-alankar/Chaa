@@ -6,6 +6,19 @@ identical checks run in CI on every push). Canonical configurations
 live in `src/problems/<name>_runtime_params.ini`; resolutions below are
 the CI settings.
 
+Every case can be plotted with the bundled tools (details in
+[Plotting & analysis](user-guide/plotting.md)):
+
+```sh
+tests/run_case.sh <case>                          # run -> test-output/<case>
+python tools/plot_fields.py test-output/<case>    # initial vs final fields
+python tools/plot_compare.py <kind> test-output/<case>   # vs analytic
+```
+
+where `<kind>` is listed per problem below when an analytic reference
+exists (`sod`, `sod-iso`, `sedov`, `taylor-couette`, `thermal-wave`,
+`cooling`, `linear-wave`, `vortex`, `epicycle`).
+
 ---
 
 ## sod — Sod shock tube
@@ -31,6 +44,9 @@ cylindrical/spherical with `--bcX1min=axis`).
   against AthenaPK (hlle/vl2) at matched configurations — six times
   closer than either code is to the exact solution
   (`ref-sod-idefix`, `ref-sod-athenapk`, `ref-sodiso-idefix`).
+
+Plot: `python tools/plot_compare.py sod test-output/sod-1d-cart`
+(`sod-iso` for the isothermal variant).
 
 ## twoblast — Woodward & Colella interacting blast waves
 
@@ -61,6 +77,10 @@ geometry and dimensionality.
 - **cross-code**: the 64³ radial density profile agrees with Idefix's
   SedovBlastWave to **3.3×10⁻⁴** relative L1 — the profile peaks match
   to three decimals (`ref-sedov3d-idefix`).
+
+Plot: `python tools/plot_compare.py sedov test-output/sedov-1d-sph`
+(works on every Sedov case; `--gamma 1.6666667` for the Idefix
+variant), `python tools/plot_fields.py test-output/sedov-2d-cyl --log rho`.
 
 ## blast — over-pressured region
 
@@ -108,8 +128,15 @@ Smooth vortex advected diagonally; after one period the exact solution
 is the initial condition. **The accuracy ladder** (64², L1(ρ)):
 `linear` 2.1×10⁻³ → `limo3` 9.5×10⁻⁴ → `ppm`+rk3 2.2×10⁻⁴; mass
 conserved to round-off (`vortex`, `vortex-limo3`, `vortex-ppm`). Also
-hosts the tracer-particle test: 64 particles return to their start
-after one period (`vortex-particles`).
+hosts the tracer-particle tests: 64 randomly scattered particles
+return to their start after one period (`vortex-particles`), and 64
+particles seeded on a ring of radius 1.5 by the `problemParticleInit`
+hook (`--partRingR=1.5`) keep their radius to 0.4 % and rotate at the
+analytic rate ω(R)=β/2π·e^{(1−R²)/2} to ~2 % (`vortex-particles-ring`).
+
+Plot: `python tools/plot_compare.py vortex test-output/vortex`;
+`python tools/plot_fields.py test-output/vortex-particles-ring`
+overplots the particle ring on the vortex.
 
 ## linearWave — acoustic eigenmode
 
@@ -119,6 +146,8 @@ dissipation. **Result:** `wenoz`+`vl2` keep the eigenmode to
 **3×10⁻⁴ of its amplitude** (`linear-wave`). Cross-code: at AthenaPK's
 configuration the dissipation agrees within 2× (and a deliberately
 unstable rk1+PLM run reproduces AthenaPK's instability growth to 2 %).
+
+Plot: `python tools/plot_compare.py linear-wave test-output/linear-wave`.
 
 ## thermalWave — conduction tests
 
@@ -132,11 +161,17 @@ Idefix's thermalDiffusion test zeroes the velocity field every step to
 isolate conduction; with the hydro response included the δT decay
 agrees with Idefix to 3 %.
 
+Plot: `python tools/plot_compare.py thermal-wave
+test-output/thermal-diffusion` and `python tools/plot_compare.py
+cooling test-output/cooling-box`.
+
 ## taylorCouette — viscous rotating cylinders
 
 1D cylindrical gap R∈[1,2], no-slip rotating walls via `userdef`
 ghosts. **Result:** steady v_φ(R) matches the analytic Couette profile
 aR + b/R to **0.35 %** (`taylor-couette`).
+
+Plot: `python tools/plot_compare.py taylor-couette test-output/taylor-couette`.
 
 ## cylinderFlow — viscous flow past a cylinder
 
@@ -172,6 +207,10 @@ Equilibrium shear flow v_y=−qΩx plus a uniform radial kick; the kick
 oscillates at the epicyclic frequency κ=√(2(2−q))Ω. **Results:**
 ⟨v_x⟩(t=π/κ) = −waveAmp to five digits, with and without FARGO
 (`epicycle-shearbox`, `epicycle-fargo`).
+
+Plot the whole oscillation by re-running with dumps enabled:
+`--outDt=0.3 --tstop=12.57`, then
+`python tools/plot_compare.py epicycle <outdir>`.
 
 ## Self-gravity verification
 

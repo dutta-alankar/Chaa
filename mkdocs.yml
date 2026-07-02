@@ -57,9 +57,11 @@ nav:
       - Boundary conditions: user-guide/boundaries.md
       - Tracer particles: user-guide/particles.md
       - Output & visualisation: user-guide/output.md
+      - Plotting & analysis: user-guide/plotting.md
       - Running in parallel: user-guide/parallel.md
   - Set up your own problem: custom-problem.md
   - Architecture & code flow: architecture.md
+  - Benchmarks & scaling: benchmarks.md
   - Tests:
       - Test suite overview: tests.md
       - Test problems in detail: test-problems.md

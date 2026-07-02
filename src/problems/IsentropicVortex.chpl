@@ -22,4 +22,17 @@ module IsentropicVortex {
                   rho*T);
     }
   }
+
+  /* with --partRingR > 0, seed the tracer particles on a circle of that
+     radius around the vortex centre (they ride the advected vortex and
+     must come back after one period); with the default 0 the generic
+     random scatter is used instead */
+  proc particleInit(ref pos: [?D] 3*real): bool {
+    if partRingR <= 0.0 then return false;
+    for p in D {
+      const th = 2.0*pi*p/D.size;
+      pos[p] = (cen1 + partRingR*cos(th), cen2 + partRingR*sin(th), 0.0);
+    }
+    return true;
+  }
 }

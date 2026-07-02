@@ -22,7 +22,7 @@ files, and which module owns which responsibility.
 | `src/Boundary.chpl` | ghost-cell boundary conditions, halo refresh | State, Eos, Problems |
 | `src/Problems.chpl` + `src/problems/*` | one module per test problem: `setup()`, optional `userBC`, `internalBC`; one `*_runtime_params.ini` per problem | Params, Grid, State, Eos |
 | `src/Forcing.chpl` | Ornstein-Uhlenbeck spectral turbulence driving | Params, Grid |
-| `src/Particles.chpl` | Lagrangian tracer particles | Params, Grid, State |
+| `src/Particles.chpl` | distributed Lagrangian tracer particles: per-locale bags, owner-computes advection, inter-locale migration, gather-by-id output | Params, Grid, State, Problems |
 | `src/Output.chpl` | txt/VTK writers, XDMF, parallel piece orchestration | State, Hdf5IO, Particles |
 | `src/Hdf5IO.chpl` | minimal HDF5 bindings + block writer | Grid, State |
 | `src/Chaa.chpl` | the driver: banner, sanity checks, main loop | everything |
@@ -59,7 +59,7 @@ while t < tstop:
     dt = computeDt()                      # Hydro: CFL + diffusion limits
     updateForcing(dt)                     # Forcing: OU amplitude update
     advance(dt, t)                        # Evolve: the integrator
-    advanceParticles(dt)                  # Particles: RK2 in frozen field
+    advanceParticles(dt, t)               # Particles: RK2 + migration
     [writeOutputs at the outDt cadence]   # Output
 ```
 

@@ -23,23 +23,34 @@ the hood.
   a uniform-pressure fluid is exactly static in every geometry, and a 2D
   (R,z) Sedov blast stays spherical to 0.01 %.
 - **Modern shock-capturing schemes** — donor-cell, slope-limited PLM,
-  third-order LimO3 and PPM reconstruction; Rusanov, HLL, HLLC and exact
-  (Godunov) Riemann solvers; SSP RK1/RK2/RK3 time stepping.
+  third-order LimO3 and PPM, and WENO-Z reconstruction; Rusanov, HLL,
+  HLLC and exact (Godunov) Riemann solvers; SSP RK1/RK2/RK3 and VL2
+  time stepping.
 - **Physics modules** — ideal-gas and (locally) isothermal equations of
   state, explicit viscosity, thermal conduction, optically thin cooling
-  (exact Townsend integration), constant and central point-mass
-  gravity, OU turbulence driving, passive tracer fields and Lagrangian
-  tracer particles.
+  (exact Townsend integration), constant, central point-mass and
+  Poisson **self-gravity**, a custom body-force hook, **shearing box**
+  with shear-periodic boundaries, **FARGO orbital advection**, OU
+  turbulence driving, passive tracer fields and fully distributed
+  Lagrangian tracer particles.
 - **Flexible meshes** — uniform, logarithmic and geometrically
-  stretched grid laws per direction, all with closed-form metrics.
+  stretched (with uniform anchor blocks) grid laws per direction, all
+  with closed-form metrics.
 - **Output for real workflows** — ASCII tables (1D), legacy VTK, and
-  HDF5 with XDMF companions that load directly into ParaView and VisIt.
-- **Validated, continuously** — 34 test cases (Sod, Sedov–Taylor,
+  HDF5 with XDMF companions that load directly into ParaView and VisIt;
+  bundled python tools for
+  [field plots and analytic comparisons](user-guide/plotting.md).
+- **Validated, continuously** — 45 test cases (Sod, Sedov–Taylor,
   blast waves, double Mach reflection, Kelvin–Helmholtz,
   Rayleigh–Taylor, isentropic vortex, Taylor–Couette, flow past a
-  cylinder, thermal diffusion, rotating disks, …) are checked
-  quantitatively against exact and similarity solutions in CI on every
-  push.
+  cylinder, thermal diffusion, rotating disks, shearing boxes,
+  self-gravity, …) are checked quantitatively against exact and
+  similarity solutions in CI on every push, and matched-configuration
+  runs are [cross-validated against Idefix and
+  AthenaPK](cross-validation.md).
+- **Scales, measurably** — near-ideal thread scaling on a node and
+  ~90 % strong-scaling efficiency of the distributed code path at 4
+  locales; see [Benchmarks & scaling](benchmarks.md).
 
 ## A taste
 

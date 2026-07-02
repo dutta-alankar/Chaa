@@ -138,3 +138,14 @@ bcX2max = periodic
 
 Command-line flags always win over the file, which wins over built-in
 defaults — see the [configuration guide](user-guide/configuration.md).
+
+## Plot what you made
+
+Every run in this tutorial can be inspected with the bundled tools:
+
+```sh
+python tools/plot_fields.py output/               # initial vs final fields
+python tools/plot_compare.py sod output/          # overlay the exact solution
+```
+
+See [Plotting & analysis](user-guide/plotting.md) for all options.
