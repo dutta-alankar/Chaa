@@ -106,7 +106,11 @@ Single locale (`CHPL_COMM=none`), strong scaling at 128³:
 
 Weak scaling (64³ per thread): 2.73 / 5.21 / 9.00 / 9.12 Mcell/s at
 1/2/4/8 threads. The 4 efficiency cores add nothing to this
-bandwidth-bound kernel — 4 threads is the sweet spot.
+bandwidth-bound kernel — 4 threads is the sweet spot (the weak-scaling
+drop at 8 "threads" is the same effect: the extra 4 units of work land
+on E-cores that contribute no additional throughput).
+
+![Laptop within-node scaling](assets/plots/laptop-node-scaling.png)
 
 Multi-locale (GASNet **smp** conduit, all locales on the one machine,
 fixed 8 threads total — this isolates the distributed code path's
@@ -119,16 +123,23 @@ overhead, not network scaling):
 | 4 × 2 | 5.44 |
 
 i.e. ~8 % total cost for splitting the box four ways over shared
-memory. Multi-locale correctness is verified here too: 4-locale piece
-output reassembles to the single-locale fields to machine precision
-(2.6×10⁻¹⁵) and particle trajectories match to 10⁻¹².
+memory (note the flat ideal line in the strong-scaling panel below:
+total compute resources are held fixed, so perfection is *no loss*,
+not linear speed-up). Multi-locale correctness is verified here too:
+4-locale piece output reassembles to the single-locale fields to
+machine precision (2.6×10⁻¹⁵) and particle trajectories match to
+10⁻¹².
+
+![Laptop multi-locale overhead](assets/plots/laptop-multi-scaling.png)
 
 ## Reproducing
 
 ```sh
 # laptop / any shared-memory machine:
-tools/bench.sh                            # single-locale thread scaling
-tools/bench.sh build-gasnet/bin/chaa 4    # + gasnet-smp locale overhead
+tools/bench.sh | tee bench.out            # single-locale thread scaling
+tools/bench.sh build-gasnet/bin/chaa 4 | tee bench.out   # + gasnet-smp locales
+python tools/plot_bench.py bench.out --select single-locale --save laptop-node.png
+python tools/plot_bench.py bench.out --select multi-locale  --save laptop-multi.png
 
 # cluster (Freya; adapt modules/substrate elsewhere):
 sbatch      tools/slurm/freya-bench-node.slurm

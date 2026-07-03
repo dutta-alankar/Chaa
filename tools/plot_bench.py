@@ -2,18 +2,23 @@
 """plot_bench.py — plot Chaa scaling-benchmark results.
 
 Parses the result lines emitted by tools/slurm/freya-bench-node.slurm
-and tools/slurm/freya-bench-multi.slurm (or anything printing the same
-format):
+and tools/slurm/freya-bench-multi.slurm:
 
     NODE   8 threads   128x 128x 128  4.95 Mcell/s
     MULTI  4 locales   256x 256x 256  61.2 Mcell/s
 
-under "== strong scaling" / "== weak scaling" section headers, and
-produces a two-panel figure per input file: measured throughput with
-the ideal-scaling line (strong), and weak-scaling efficiency.
+as well as the markdown tables printed by tools/bench.sh:
+
+    | 1 | 8 | 128x 128x 128 | 5.93 |     (locales | threads | grid | rate)
+
+under "strong scaling" / "weak scaling" section headers, and produces
+a two-panel figure: measured throughput with the ideal-scaling line
+(strong), and weak-scaling efficiency. For bench.sh output, --select
+single|multi picks which pair of sections to plot; the fixed-total-
+threads multi-locale protocol gets a flat ideal line.
 
     python tools/plot_bench.py chaa-bench-node-*.out --save node.png
-    python tools/plot_bench.py chaa-bench-multi-*.out --save multi.png
+    python tools/plot_bench.py bench.out --select single --save laptop.png
 """
 import argparse
 import re
@@ -22,23 +27,41 @@ import sys
 import numpy as np
 
 
-def parse(path):
-    """-> dict with 'strong' and 'weak' lists of (units, rate)."""
+def parse(path, select=None):
+    """-> (dict with 'strong'/'weak' lists of (units, rate), kind,
+    flat_ideal) — flat_ideal marks a fixed-total-resources strong
+    protocol whose ideal line is horizontal."""
     out = {"strong": [], "weak": []}
     sec = None
+    keep = True
+    flat = False
     pat = re.compile(r"^(NODE|MULTI)\s+(\d+)\s+(?:threads|locales)\s+"
                      r"(\d+)x\s*(\d+)x\s*(\d+)\s+([0-9.]+)\s+Mcell/s")
+    tab = re.compile(r"^\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*"
+                     r"(\d+)x\s*(\d+)x\s*(\d+)\s*\|\s*([0-9.]+)\s*\|")
     kind = None
     for line in open(path):
-        if "strong scaling" in line:
-            sec = "strong"
-        elif "weak scaling" in line:
-            sec = "weak"
+        if "strong scaling" in line or "weak scaling" in line:
+            sec = "strong" if "strong" in line else "weak"
+            keep = select is None or select in line
+            if sec == "strong" and keep:
+                flat = "fixed total" in line
+                kind = "locales" if "multi" in line.lower() else kind
+        if not keep:
+            continue
         m = pat.match(line.strip())
         if m and sec:
             kind = "threads" if m.group(1) == "NODE" else "locales"
             out[sec].append((int(m.group(2)), float(m.group(6))))
-    return out, kind
+            continue
+        m = tab.match(line.strip())
+        if m and sec:
+            locales, threads = int(m.group(1)), int(m.group(2))
+            if kind is None:
+                kind = "locales" if locales > 1 else "threads"
+            out[sec].append((locales if kind == "locales" else threads,
+                             float(m.group(6))))
+    return out, kind, flat
 
 
 def main():
@@ -47,6 +70,10 @@ def main():
     ap.add_argument("results", help="benchmark output file")
     ap.add_argument("--save", default=None)
     ap.add_argument("--title", default=None)
+    ap.add_argument("--select", default=None,
+                    help="only sections whose header contains this "
+                         "(e.g. 'single-locale' / 'multi-locale' for "
+                         "bench.sh output)")
     args = ap.parse_args()
     if args.save:
         import matplotlib
@@ -54,7 +81,7 @@ def main():
     import matplotlib.pyplot as plt
     from matplotlib.ticker import NullFormatter
 
-    data, kind = parse(args.results)
+    data, kind, flat = parse(args.results, args.select)
     if not data["strong"] and not data["weak"]:
         sys.exit(f"no benchmark lines found in {args.results}")
 
@@ -64,10 +91,13 @@ def main():
         n = np.array([u for u, _ in data["strong"]], dtype=float)
         r = np.array([v for _, v in data["strong"]])
         a1.loglog(n, r, "o-", label="measured")
-        a1.loglog(n, r[0] * n / n[0], "k--", lw=1, label="ideal")
+        ideal = np.full_like(n, r[0]) if flat else r[0] * n / n[0]
+        a1.loglog(n, ideal, "k--", lw=1, label="ideal")
         a1.set_xlabel(kind)
         a1.set_ylabel("Mcell-updates/s")
-        a1.set_title("strong scaling (fixed problem)", fontsize=10)
+        a1.set_title("strong scaling (fixed problem"
+                     + (", fixed total threads)" if flat else ")"),
+                     fontsize=10)
         a1.set_xticks(n)
         a1.set_xticklabels([f"{int(x)}" for x in n])
         a1.xaxis.set_minor_formatter(NullFormatter())
