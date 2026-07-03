@@ -99,3 +99,10 @@ tools — `python tools/plot_fields.py test-output/<case>` for the
 fields, `python tools/plot_compare.py <kind> test-output/<case>` for an
 overlay on the analytic solution where one exists (see
 [Plotting & analysis](user-guide/plotting.md)).
+
+Beyond the per-case matrix, CI also runs a **multi-locale integration
+job**: it builds a gasnet (smp) Chapel runtime in the container, runs
+Cartesian and curvilinear problems on **3 locales**, combines the
+per-locale piece output with `tools/combine_pieces.py`, and requires
+the result to match a single-locale reference run to round-off
+(`tests/run_multilocale_combine.sh`).

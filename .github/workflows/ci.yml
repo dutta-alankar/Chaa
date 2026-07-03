@@ -51,6 +51,40 @@ jobs:
       - name: smoke test
         run: ./build/bin/chaa --problem=sod --nx1=64 --tstop=0.01 --outFormats=txt
 
+  multilocale-combine:
+    name: multi-locale run + piece combiner
+    runs-on: ubuntu-latest
+    container:
+      image: chapel/chapel:2.8.0
+      options: --shm-size=1gb
+    steps:
+      - uses: actions/checkout@v4
+      - name: install deps
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq make cmake libhdf5-dev curl \
+            python3-numpy python3-h5py > /dev/null
+      - name: build gasnet-smp Chapel runtime
+        run: |
+          export CHPL_HOME=$(chpl --print-chpl-home)
+          if [ ! -d "$CHPL_HOME/third-party/gasnet/gasnet-src" ]; then
+            curl -sL -o /tmp/chapel.tar.gz \
+              https://github.com/chapel-lang/chapel/releases/download/2.8.0/chapel-2.8.0.tar.gz
+            tar -xzf /tmp/chapel.tar.gz -C /tmp \
+              chapel-2.8.0/third-party/gasnet/gasnet-src
+            cp -R /tmp/chapel-2.8.0/third-party/gasnet/gasnet-src \
+              "$CHPL_HOME/third-party/gasnet/"
+          fi
+          cd "$CHPL_HOME"
+          CHPL_COMM=gasnet CHPL_COMM_SUBSTRATE=smp make -j4 runtime
+      - name: build chaa (single- and multi-locale)
+        run: |
+          cmake -B build && cmake --build build
+          export CHPL_COMM=gasnet CHPL_COMM_SUBSTRATE=smp
+          cmake -B build-gasnet && cmake --build build-gasnet
+      - name: run 3 locales, combine pieces, compare with 1-locale reference
+        run: tests/run_multilocale_combine.sh 3
+
   test:
     name: ${{ matrix.case }}
     needs: build
