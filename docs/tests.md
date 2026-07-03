@@ -102,7 +102,8 @@ overlay on the analytic solution where one exists (see
 
 Beyond the per-case matrix, CI also runs a **multi-locale integration
 job**: it builds a gasnet (smp) Chapel runtime in the container, runs
-Cartesian and curvilinear problems on **3 locales**, combines the
+Cartesian and curvilinear problems on **multiple locales** (3, clamped
+to the runner's physical core count), combines the
 per-locale piece output with `tools/combine_pieces.py`, and requires
 the result to match a single-locale reference run to round-off
 (`tests/run_multilocale_combine.sh`).

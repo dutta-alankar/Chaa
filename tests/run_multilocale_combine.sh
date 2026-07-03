@@ -12,6 +12,21 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"
 NL=${1:-3}
+
+# Chapel refuses more co-locales than physical cores, so clamp NL to
+# what the machine actually has (CI runners can be as small as 2 cores).
+if command -v lscpu > /dev/null 2>&1; then
+  CORES=$(lscpu -p=Core,Socket 2>/dev/null | grep -v '^#' | sort -u | wc -l)
+elif command -v sysctl > /dev/null 2>&1; then
+  CORES=$(sysctl -n hw.physicalcpu 2>/dev/null || echo 0)
+else
+  CORES=0
+fi
+if [ "${CORES:-0}" -ge 2 ] && [ "$NL" -gt "$CORES" ]; then
+  echo "note: only $CORES physical cores available; using $CORES locales instead of $NL"
+  NL=$CORES
+fi
+
 BIN=${CHAA_BIN:-build/bin/chaa}
 ML=${CHAA_ML_BIN:-build-gasnet/bin/chaa}
 : "${PY:=python3}"
