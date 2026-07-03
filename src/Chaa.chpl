@@ -15,7 +15,12 @@ module Chaa {
   use Forcing, Particles, SelfGravity, Fargo, Restart;
   use Logo;
   use Time, FileSystem, Math;
+  use CommDiagnostics;
   import Cli;
+
+  /* --commDiag=true: count remote gets/puts/on-stmts over the time
+     loop and print them per locale at the end (multi-locale tuning) */
+  config const commDiag = false;
 
   proc printBanner() {
     printLogo();
@@ -124,8 +129,6 @@ module Chaa {
     var step = 0;
     var dumpN = 0;
     var nextOut = outDt;
-    var sw: stopwatch;
-    sw.start();
 
     if Cli.restart {
       try! readRestart(t, step, dumpN, nextOut);
@@ -142,6 +145,11 @@ module Chaa {
                   else 0.0;
 
     var stopped = false;
+    if commDiag then startCommDiagnostics();
+    /* the reported Mcell-updates/s measures the evolution loop only
+       (initial/final output and restart I/O excluded) */
+    var sw: stopwatch;
+    sw.start();
     var dt = computeDt();
     while t < tstop*(1.0 - 1.0e-12) && step < maxSteps {
       dt = min(dt, tstop - t);
@@ -183,11 +191,17 @@ module Chaa {
       }
     }
 
+    sw.stop();
+    if commDiag {
+      stopCommDiagnostics();
+      const d = getCommDiagnostics();
+      for l in 0..#numLocales do
+        writeln("commDiag locale ", l, ": ", d[l]);
+    }
     if !stopped {
       writeOutputs(dumpN, t);
       try! writeRestart(t, step, dumpN + 1, nextOut);
     }
-    sw.stop();
 
     const ncells = nx1*nx2*nx3;
     writeln("done: ", step, " steps to t = ", t, " in ",

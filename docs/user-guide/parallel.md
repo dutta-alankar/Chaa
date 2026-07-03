@@ -55,9 +55,13 @@ locale-local fluff cache, refreshed once per boundary application.
 **Multi-locale correctness is verified**, not assumed: a 4-locale
 Sedov/vortex run reproduces the single-locale fields to machine
 precision (max |Δρ| = 2.6×10⁻¹⁵ after piece reassembly) and
-single-locale particle trajectories to 10⁻¹²; strong-scaling overhead
-of the distributed code path is ~10 % at 4 locales on one node
-([benchmarks](../benchmarks.md)).
+single-locale particle trajectories to 10⁻¹². On a production cluster
+(MPCDF Freya, Omni-Path) the full test suite passes on a compute node
+and a 512³ box reaches 44 Mcell/s across 8 nodes
+([benchmarks](../benchmarks.md)); the complete cluster recipe — Chapel
+build, GASNet/PMIx launch pattern, SLURM templates and the pitfalls —
+is in
+[`tools/slurm/README.md`](https://github.com/dutta-alankar/Chaa/blob/main/tools/slurm/README.md).
 
 ## Parallel I/O
 

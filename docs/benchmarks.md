@@ -1,91 +1,142 @@
 # Benchmarks & scaling
 
 Chaa's figure of merit is the **Mcell-updates/s** printed at the end of
-every run (steps × cells / wall time). The numbers below were measured
-with `tools/bench.sh` on the 3D Cartesian Sedov blast (hllc/linear/rk2,
-no I/O, 50 steps), on an Apple-silicon laptop (8 cores: 4 performance +
-4 efficiency), Chapel 2.8, `--fast`.
+every run (steps × cells / wall time of the evolution loop; I/O and
+setup excluded). The benchmark problem throughout is the 3D Cartesian
+Sedov blast (hllc/PLM/RK2, 50 steps, no output), run by
+`tools/bench.sh` (laptop) and the `tools/slurm/freya-bench-*.slurm`
+scripts (cluster); the figures are produced by `tools/plot_bench.py`.
 
-Reproduce them with
+Two machines are covered: a production HPC cluster (**MPCDF Freya**)
+and an Apple-silicon laptop.
 
-```sh
-tools/bench.sh                            # single-locale (threads)
-tools/bench.sh build-gasnet/bin/chaa 4    # + multi-locale (gasnet)
-```
+## MPCDF Freya (production cluster)
 
-## Single locale — strong scaling
+**Hardware & software.** Each compute node has 2× Intel Xeon Gold 6138
+(Skylake-SP, 20 cores each, 2.0 GHz base) — 40 cores and ~190 GB usable
+memory per node — connected by a 100 Gb/s Intel **Omni-Path** fabric
+(`hfi1`); SLES 15, SLURM. Chaa was compiled with Chapel 2.8 (C
+backend, `CHPL_LLVM=none`) and gcc 14.1; the multi-locale binary uses
+the GASNet-EX **ibv** conduit over Omni-Path verbs, bootstrapped by
+`srun --mpi=pmix`, with one Chapel locale per node and 40 threads per
+locale. HDF5 1.14.1 (serial). The complete setup and launch recipe is
+in [`tools/slurm/README.md`](https://github.com/dutta-alankar/Chaa/blob/main/tools/slurm/README.md).
 
-Fixed 128³ grid, varying `CHPL_RT_NUM_THREADS_PER_LOCALE`
-(`CHPL_COMM=none` build):
+**Correctness first:** the full 47-case validated test suite passes on
+a Freya compute node in 3 m 44 s (144 quantitative checks).
 
-| threads | Mcell/s | speed-up | efficiency |
+### Within one node (thread scaling, `CHPL_COMM=none`)
+
+| threads | grid | Mcell/s | speed-up |
 |---|---|---|---|
-| 1 | 2.50 | 1.0× | — |
-| 2 | 4.95 | 1.98× | 99 % |
-| 4 | 8.05 | 3.23× | 81 % |
-| 8 | 7.91 | 3.17× | — |
+| 1 | 128³ | 1.04 | — |
+| 2 | 128³ | 2.01 | 1.93× |
+| 5 | 128³ | 4.47 | 4.30× |
+| 10 | 128³ | 7.71 | 7.41× |
+| 20 | 128³ | 10.30 | 9.90× |
+| 40 | 128³ | 14.77 | 14.2× |
 
-Scaling is near-ideal across the 4 performance cores; the 4 efficiency
-cores add nothing to this memory-bandwidth-bound stencil kernel (a
-common result on hybrid Apple-silicon parts), so 4 threads is the sweet
-spot on this machine.
+Weak scaling (64³ cells per 5 threads) tells the same story: 4.33 →
+7.57 → 9.97 → 14.76 Mcell/s at 5/10/20/40 threads. Scaling is
+near-ideal while a socket's memory bandwidth lasts and saturates
+beyond ~10 cores per socket — the expected behaviour of a
+bandwidth-bound stencil code on Skylake; the second socket doubles the
+available bandwidth and the rate follows.
 
-## Single locale — weak scaling
+![Freya within-node scaling](assets/plots/freya-node-scaling.png)
 
-64³ cells per thread (the grid grows with the thread count):
+### Across nodes (gasnet/ibv, one 40-thread locale per node)
 
-| threads | grid | Mcell/s | efficiency |
-|---|---|---|---|
-| 1 | 64³ | 2.60 | — |
-| 2 | 128·64·64 | 5.00 | 96 % |
-| 4 | 128·128·64 | 7.85 | 76 % |
-| 8 | 128³ | 7.34 | — |
+Strong scaling, fixed 256³ box:
 
-## Multi-locale — strong scaling
+| locales (nodes) | Mcell/s | speed-up |
+|---|---|---|
+| 1 | 8.50 | — |
+| 2 | 12.21 | 1.44× |
+| 4 | 18.35 | 2.16× |
+| 8 | 18.52 | 2.18× |
 
-`CHPL_COMM=gasnet` (smp conduit) build, all locales on the one node,
-**fixed total thread count** (8) so that only the communication /
-partitioning overhead varies:
-
-| locales | threads/locale | grid | Mcell/s | efficiency |
-|---|---|---|---|---|
-| 1 | 8 | 128³ | 5.56 | — |
-| 2 | 4 | 128³ | 5.35 | 96 % |
-| 4 | 2 | 128³ | 4.98 | 90 % |
-
-Splitting the same box over 4 locales costs only ~10 %: the halo
-exchanges (`updateFluff()`) and the distributed-array bookkeeping are
-cheap relative to the hydro sweeps. (The gasnet binary is ~30 % slower
-than the `CHPL_COMM=none` binary at equal resources — the standard cost
-of compiling array accesses for a potentially remote address space.)
-
-## Multi-locale — weak scaling
-
-128·64·64 cells **per locale**, 2 threads per locale:
+Weak scaling, 256³ cells per locale:
 
 | locales | grid | Mcell/s | efficiency |
 |---|---|---|---|
-| 1 | 128·64·64 | 3.08 | — |
-| 2 | 128·128·64 | 5.11 | 83 % |
-| 4 | 128³ | 4.00 | 32 % |
+| 1 | 256³ | 8.48 | — |
+| 2 | 512·256·256 | 14.90 | 88 % |
+| 4 | 512·512·256 | 24.90 | 73 % |
+| 8 | 512³ | 44.13 | 65 % |
 
-The 4-locale point is limited by the machine, not the code: 4 locales ×
-2 threads oversubscribes onto the efficiency cores (compare the
-single-locale strong-scaling table, where 8 native threads are no
-faster than 4).
+![Freya across-node scaling](assets/plots/freya-multi-scaling.png)
 
-## Reading these numbers
+How to read these numbers:
 
-Everything here ran on **one laptop** — the multi-locale runs use
-GASNet's shared-memory conduit, so they demonstrate correctness and
-measure the *overhead* of the distributed-memory code path, not real
-network scaling. On a cluster the strong-scaling efficiency per
-doubling (96 %, 90 % above) is the quantity to watch, with the network
-replacing shared memory in the halo exchange. Piece-wise parallel
-output (per-locale HDF5/VTK + XDMF stitching) was verified in these
-runs to reproduce the single-locale fields to machine precision
-(max |Δρ| = 2.6×10⁻¹⁵), and distributed tracer particles match the
-single-locale trajectories to 10⁻¹².
+- **Weak scaling is the operative regime** for a distributed
+  finite-volume code: grow the problem with the machine. 512³
+  (134 million cells) runs at 44 Mcell/s on 8 nodes at 65 % efficiency.
+- **Strong scaling saturates** once the per-locale block gets small:
+  256³ split 8 ways leaves only 2 M cells per 40-core node, and the
+  per-step distributed-loop synchronisations (a fixed ~tens of ms per
+  step) stop shrinking. Use ≳8 M cells per node for efficient runs.
+- The multi-locale binary pays a **flat ~40 % single-locale penalty**
+  versus the `CHPL_COMM=none` build (8.5 vs 14.8 Mcell/s on the same
+  node) — the cost of compiling every array access for a potentially
+  remote address space with the C backend. Use the single-locale build
+  whenever a run fits on one node.
 
-See [Running in parallel](user-guide/parallel.md) for how to build the
-gasnet runtime and launch multi-locale jobs.
+Two multi-locale performance lessons from this campaign are now baked
+into the code (they were invisible on shared memory and dominant on a
+real network): restart/gather I/O uses bulk per-plane transfers
+instead of element-wise remote reads, and the grid is block-split
+**only along x1**, keeping every halo plane contiguous in memory (the
+default 2×2×2 locale grid on 8 locales cuts the memory-fastest axis
+into tens of thousands of tiny strided RDMAs and cost a third of the
+8-node throughput).
+
+## Apple-silicon laptop (8 cores: 4 performance + 4 efficiency)
+
+Measured with `tools/bench.sh`, Chapel 2.8 (LLVM backend), macOS.
+
+Single locale (`CHPL_COMM=none`), strong scaling at 128³:
+
+| threads | Mcell/s | speed-up |
+|---|---|---|
+| 1 | 2.79 | — |
+| 2 | 5.37 | 1.92× |
+| 4 | 9.18 | 3.29× |
+| 8 | 8.93 | 3.20× |
+
+Weak scaling (64³ per thread): 2.73 / 5.21 / 9.00 / 9.12 Mcell/s at
+1/2/4/8 threads. The 4 efficiency cores add nothing to this
+bandwidth-bound kernel — 4 threads is the sweet spot.
+
+Multi-locale (GASNet **smp** conduit, all locales on the one machine,
+fixed 8 threads total — this isolates the distributed code path's
+overhead, not network scaling):
+
+| locales × threads | Mcell/s (strong, 128³) |
+|---|---|
+| 1 × 8 | 5.93 |
+| 2 × 4 | 5.62 |
+| 4 × 2 | 5.44 |
+
+i.e. ~8 % total cost for splitting the box four ways over shared
+memory. Multi-locale correctness is verified here too: 4-locale piece
+output reassembles to the single-locale fields to machine precision
+(2.6×10⁻¹⁵) and particle trajectories match to 10⁻¹².
+
+## Reproducing
+
+```sh
+# laptop / any shared-memory machine:
+tools/bench.sh                            # single-locale thread scaling
+tools/bench.sh build-gasnet/bin/chaa 4    # + gasnet-smp locale overhead
+
+# cluster (Freya; adapt modules/substrate elsewhere):
+sbatch      tools/slurm/freya-bench-node.slurm
+sbatch -N 8 tools/slurm/freya-bench-multi.slurm
+python tools/plot_bench.py chaa-bench-node-*.out  --save node.png
+python tools/plot_bench.py chaa-bench-multi-*.out --save multi.png
+```
+
+See [Running in parallel](user-guide/parallel.md) for building the
+multi-locale runtime and [`tools/slurm/README.md`](https://github.com/dutta-alankar/Chaa/blob/main/tools/slurm/README.md)
+for the full cluster recipe.

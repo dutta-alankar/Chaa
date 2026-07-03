@@ -50,9 +50,10 @@ the hood.
   similarity solutions in CI on every push, and matched-configuration
   runs are [cross-validated against Idefix and
   AthenaPK](cross-validation.md).
-- **Scales, measurably** — near-ideal thread scaling on a node and
-  ~90 % strong-scaling efficiency of the distributed code path at 4
-  locales; see [Benchmarks & scaling](benchmarks.md).
+- **Scales, measurably** — 14× thread scaling on a 40-core cluster
+  node and 44 Mcell/s on a 512³ box across 8 Omni-Path-connected nodes
+  (65 % weak-scaling efficiency), with the full test suite passing on
+  the cluster; see [Benchmarks & scaling](benchmarks.md).
 
 ## A taste
 

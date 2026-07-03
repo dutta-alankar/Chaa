@@ -309,20 +309,24 @@ epicyclic oscillation — the same solutions the CI validators check.
 
 ## Benchmarks
 
-Measured with `tools/bench.sh` (3D Sedov, no I/O) on an 8-core
-Apple-silicon laptop (4 performance + 4 efficiency cores), Chapel 2.8:
+Benchmarked (3D Sedov, evolution loop only) on **MPCDF Freya** —
+2× Xeon Gold 6138 (40 cores) per node, 100 Gb/s Omni-Path, Chapel 2.8
+gasnet/ibv with one locale per node — and on an 8-core Apple-silicon
+laptop:
 
-| scaling | result |
+| machine / scaling | result |
 |---|---|
-| threads (strong, 128³) | 2.50 → 4.95 → 8.05 Mcell/s at 1→2→4 threads (99 %/81 % efficiency; the 4 E-cores add nothing to this bandwidth-bound kernel) |
-| threads (weak, 64³/thread) | 96 % at 2, 76 % at 4 threads |
-| locales (strong, gasnet-smp, fixed 8 threads total) | 5.56 → 5.35 → 4.98 Mcell/s at 1→2→4 locales — **96 %/90 % efficiency**, i.e. ~10 % total cost for distributing the box |
+| Freya, one node (strong, 128³) | 1.04 → 14.8 Mcell/s at 1→40 threads (14.2×; bandwidth-bound Skylake saturation) |
+| Freya, across nodes (weak, 256³/node) | 8.5 → 14.9 → 24.9 → **44.1 Mcell/s** at 1→2→4→8 nodes (88/73/65 % efficiency; 512³ on 8 nodes) |
+| Freya, across nodes (strong, 256³) | 8.5 → 18.5 Mcell/s at 1→8 nodes — saturates when per-node blocks get small; use ≳8 M cells/node |
+| Freya, validation | the **full 47-case suite passes on a compute node** (3 m 44 s) |
+| laptop (strong, 128³) | 2.79 → 9.18 Mcell/s at 1→4 threads (E-cores add nothing) |
+| laptop (gasnet-smp locales, fixed threads) | ~8 % total cost for splitting the box 4 ways |
 | multi-locale correctness | 4-locale fields match 1-locale to 2.6e-15; particle trajectories to 1e-12 |
 
-The multi-locale numbers use GASNet's shared-memory conduit on one
-node, so they measure the *overhead* of the distributed code path
-(halo exchanges, remote-capable array access), not network scaling —
-details and tables in the
+Full tables, scaling figures, hardware/software details and the
+reproduction recipes (including the complete Freya setup guide in
+[`tools/slurm/README.md`](tools/slurm/README.md)) are on the
 [benchmarks page](https://dutta-alankar.github.io/Chaa/benchmarks/).
 
 ## Layout

@@ -86,6 +86,11 @@ and is regenerated from scratch — runs included — by
 PY=/path/to/python tools/make_gallery.sh
 ```
 
+There is also `tools/plot_bench.py`, which turns the output of the
+benchmark scripts (`tools/bench.sh`, `tools/slurm/freya-bench-*`) into
+the strong/weak scaling figures on the
+[benchmarks page](../benchmarks.md).
+
 ## Programmatic access
 
 `tools/chaa_io.py` is a small reader library you can import from your

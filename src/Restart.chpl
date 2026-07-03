@@ -70,12 +70,19 @@ module Restart {
       w.writeBinary(t); w.writeBinary(step);
       w.writeBinary(dumpN); w.writeBinary(nextOut);
 
-      // conservative state, one (j,k) row at a time
+      // conservative state, one (j,k) row at a time; each k-plane is
+      // fetched with one bulk (strided) transfer per locale rather
+      // than element-wise remote reads — essential multi-locale
       var buf: [0..#(nx1*NTOT)] real;
-      for k in 1..nx3 do for j in 1..nx2 {
-        forall i in 1..nx1 with (ref buf) do
-          for param c in 0..NTOT-1 do buf[(i-1)*NTOT + c] = U[i,j,k](c);
-        w.writeBinary(buf);
+      var plane: [1..nx1, 1..nx2] StateVec;
+      for k in 1..nx3 {
+        plane = U[1..nx1, 1..nx2, k];
+        for j in 1..nx2 {
+          forall i in 1..nx1 with (ref buf) do
+            for param c in 0..NTOT-1 do
+              buf[(i-1)*NTOT + c] = plane[i,j](c);
+          w.writeBinary(buf);
+        }
       }
 
       // tracer particles (id + position)
@@ -102,9 +109,13 @@ module Restart {
       w.writeBinary(if sgFourPiG > 0.0 then 1 else 0);
       if sgFourPiG > 0.0 {
         var gb: [0..#nx1] real;
-        for k in 1..nx3 do for j in 1..nx2 {
-          forall i in 1..nx1 with (ref gb) do gb[i-1] = PHI[i,j,k];
-          w.writeBinary(gb);
+        var gp: [1..nx1, 1..nx2] real;
+        for k in 1..nx3 {
+          gp = PHI[1..nx1, 1..nx2, k];
+          for j in 1..nx2 {
+            forall i in 1..nx1 with (ref gb) do gb[i-1] = gp[i,j];
+            w.writeBinary(gb);
+          }
         }
       }
       w.close();
@@ -146,13 +157,17 @@ module Restart {
       r.readBinary(dumpN); r.readBinary(nextOut);
 
       var buf: [0..#(nx1*NTOT)] real;
-      for k in 1..nx3 do for j in 1..nx2 {
-        r.readBinary(buf);
-        forall i in 1..nx1 {
-          var u: StateVec;
-          for param c in 0..NTOT-1 do u(c) = buf[(i-1)*NTOT + c];
-          U[i,j,k] = u;
+      var plane: [1..nx1, 1..nx2] StateVec;
+      for k in 1..nx3 {
+        for j in 1..nx2 {
+          r.readBinary(buf);
+          forall i in 1..nx1 with (ref plane) {
+            var u: StateVec;
+            for param c in 0..NTOT-1 do u(c) = buf[(i-1)*NTOT + c];
+            plane[i,j] = u;
+          }
         }
+        U[1..nx1, 1..nx2, k] = plane;   // one bulk push per k-plane
       }
 
       var np: int;
@@ -193,9 +208,13 @@ module Restart {
         halt("restart file and run disagree on self-gravity");
       if hasG == 1 {
         var gb: [0..#nx1] real;
-        for k in 1..nx3 do for j in 1..nx2 {
-          r.readBinary(gb);
-          forall i in 1..nx1 do PHI[i,j,k] = gb[i-1];
+        var gp: [1..nx1, 1..nx2] real;
+        for k in 1..nx3 {
+          for j in 1..nx2 {
+            r.readBinary(gb);
+            forall i in 1..nx1 with (ref gp) do gp[i,j] = gb[i-1];
+          }
+          PHI[1..nx1, 1..nx2, k] = gp;
         }
       }
       r.close();
