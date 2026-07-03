@@ -78,7 +78,12 @@ switches to **parallel piece output**:
   `*.particles.NNNN.txt` file regardless of locale count;
 - the bundled python readers (`tools/chaa_io.py`,
   [Plotting & analysis](plotting.md)) reassemble piece files onto the
-  global grid transparently.
+  global grid transparently;
+- to turn the pieces into *single global files* after the fact
+  (`problem.NNNN.h5`/`.vtk`, exactly as a single-locale run would have
+  written), sweep the directory with
+  `python tools/combine_pieces.py <outDir>` — see
+  [Output & visualisation](output.md).
 
 This strategy works identically with serial and parallel (MPI) builds
 of libhdf5 — independent files need no MPI-IO. True single-file

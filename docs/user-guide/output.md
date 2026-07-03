@@ -60,3 +60,26 @@ Beyond ParaView/VisIt, the bundled python tools read every format
 `tools/plot_fields.py` for quick looks, `tools/plot_compare.py` for
 overlays on analytic solutions, and `tools/chaa_io.py` as an importable
 reader — see [Plotting & analysis](plotting.md).
+
+## Combining multi-locale pieces into single files
+
+Multi-locale runs write one HDF5/VTK piece per locale
+(`problem.NNNN.locL.h5` / `.locL.vtk`) plus an XDMF collection that
+stitches them for ParaView/VisIt. If you want *single global files*
+instead — for archiving, for tools that don't read XDMF collections,
+or just for tidiness — sweep the output directory with
+
+```sh
+python tools/combine_pieces.py output/            # every snapshot
+python tools/combine_pieces.py output/ --clean    # ...then delete pieces
+python tools/combine_pieces.py output/ --force    # overwrite existing
+```
+
+For each snapshot this produces exactly what a single-locale run would
+have written: one `problem.NNNN.h5` (with the `.xmf` rewritten as a
+single grid), and one `problem.NNNN.vtk` — validated to match genuine
+single-locale output to machine precision for Cartesian (rectilinear)
+and curvilinear (mapped structured-grid) meshes alike. HDF5 pieces are
+placed by their stored native coordinates; 1D `txt` dumps are always
+written globally by Chaa itself, so there is never anything to combine
+for them.

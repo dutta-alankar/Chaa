@@ -110,4 +110,7 @@ p = load_particles("output/")      # (n, 4): id, x, y, z — or None
 
 It handles multi-locale piece output transparently (pieces are placed
 onto the global grid by their coordinate ranges), so analysis scripts
-never need to care how many locales wrote a dump.
+never need to care how many locales wrote a dump. To materialise the
+combined data as ordinary single files instead, use
+`python tools/combine_pieces.py <outdir>`
+([Output & visualisation](output.md)).
