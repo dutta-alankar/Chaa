@@ -17,19 +17,36 @@ module Boundary {
     return i >= 1 && i <= nx1 && j >= 1 && j <= nx2 && k >= 1 && k <= nx3;
   }
 
-  proc applyBCs(t: real) {
+  /* refreshU=false (GPU path): the device kernels never read the U
+     halo, so the ghost-cell U refresh over the whole padded domain —
+     the dominant host cost per stage at large grids — is skipped;
+     only the isothermal V-pressure constraint still needs the pass. */
+  /* doX2/doX3=false (GPU path): those directions are not split across
+     blocks, so their standard BCs run as device kernels instead
+     (Gpu.devSideBC) and the host pass is skipped */
+  proc applyBCs(t: real, refreshU: bool = true,
+                doX2: bool = true, doX3: bool = true) {
     if act1 { applySide(0, t); applySide(1, t); }
-    if act2 { applySide(2, t); applySide(3, t); }
-    if act3 { applySide(4, t); applySide(5, t); }
+    if act2 && doX2 { applySide(2, t); applySide(3, t); }
+    if act3 && doX3 { applySide(4, t); applySide(5, t); }
 
-    forall (i, j, k) in DAll {
-      if !isInterior((i, j, k)) {
-        if eosCode == EOS_ISO then
-          V[i,j,k](IPRS) = V[i,j,k](IRHO)*cs2At(i, j, k);
-        U[i,j,k] = prim2cons(V[i,j,k]);
+    if refreshU {
+      forall (i, j, k) in DAll {
+        if !isInterior((i, j, k)) {
+          if eosCode == EOS_ISO then
+            V[i,j,k](IPRS) = V[i,j,k](IRHO)*cs2At(i, j, k);
+          U[i,j,k] = prim2cons(V[i,j,k]);
+        }
       }
+      syncHalos();
+    } else {
+      if eosCode == EOS_ISO then
+        forall (i, j, k) in DAll {
+          if !isInterior((i, j, k)) then
+            V[i,j,k](IPRS) = V[i,j,k](IRHO)*cs2At(i, j, k);
+        }
+      V.updateFluff();
     }
-    syncHalos();
   }
 
   proc applySide(side: int, t: real) {

@@ -17,6 +17,10 @@ find_program(CHPL_EXECUTABLE chpl REQUIRED
              DOC "Chapel compiler (https://chapel-lang.org)")
 
 option(CHAA_HDF5 "Enable HDF5 output (links -lhdf5)" ON)
+option(CHAA_GPU "GPU build (needs a CHPL_LOCALE_MODEL=gpu Chapel)" OFF)
+set(CHAA_GPU_BLOCK_SIZE "128" CACHE STRING
+    "GPU threads per block (the flux kernel is register-heavy; 512 \
+overflows the per-block register file)")
 set(CHAA_NG "3" CACHE STRING "ghost-cell layers (3 needed for ppm/wenoz)")
 set(CHAA_NSCAL "1" CACHE STRING "passive tracer fields")
 set(CHAA_CHPL_FLAGS "--fast" CACHE STRING "chpl optimization/extra flags")
@@ -28,6 +32,14 @@ set(CHAA_H5_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/src/chaa_h5.h)
 
 separate_arguments(CHPL_FLAG_LIST UNIX_COMMAND "${CHAA_CHPL_FLAGS}")
 list(APPEND CHPL_FLAG_LIST -sNG=${CHAA_NG} -sNSCAL=${CHAA_NSCAL})
+
+if(CHAA_GPU)
+  list(APPEND CHPL_FLAG_LIST -sgpuEnabled=true
+       --gpu-block-size=${CHAA_GPU_BLOCK_SIZE})
+  message(STATUS "GPU execution enabled "
+                 "(requires CHPL_LOCALE_MODEL=gpu at chpl build time; "
+                 "block size ${CHAA_GPU_BLOCK_SIZE})")
+endif()
 
 if(CHAA_HDF5)
   find_library(HDF5_LIBRARY

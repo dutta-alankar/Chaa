@@ -1,5 +1,9 @@
 # Chaa on MPCDF Freya — setup & running guide
 
+> The same material, rendered with the rest of the documentation:
+> [Running on Freya (MPCDF)](https://dutta-alankar.github.io/Chaa/freya/)
+> — including the GPU Chapel build and GPU job patterns.
+
 Step-by-step instructions for building Chapel (single- and
 multi-locale) on [MPCDF Freya](https://docs.mpcdf.mpg.de) and compiling
 and running Chaa there. Everything below was validated on Freya
@@ -167,3 +171,43 @@ sbatch      tools/slurm/freya-bench-node.slurm    # within-node thread scaling
 sbatch -N 8 tools/slurm/freya-bench-multi.slurm   # across-node strong + weak
 python tools/plot_bench.py chaa-bench-*.out --save scaling.png
 ```
+
+## 7. GPUs (p.gpu.ampere: 4x A100 per node)
+
+GPU code generation needs Chapel's LLVM backend, so a **second**
+Chapel installation is built (the CPU one above uses the C backend).
+Everything is scripted; details and design notes live in the
+[GPU documentation](https://dutta-alankar.github.io/Chaa/user-guide/gpu/).
+
+```sh
+# one-time: GPU Chapel (bundled LLVM + CUDA + gasnet runtime, ~2 h)
+mkdir -p ~/ptmp/Chaa/chapel-gpu && cd ~/ptmp/Chaa/chapel-gpu
+wget https://github.com/chapel-lang/chapel/releases/download/2.8.0/chapel-2.8.0.tar.gz
+tar xzf chapel-2.8.0.tar.gz
+cd ~/ptmp/Chaa && sbatch tools/slurm/build-chapel-gpu.slurm
+
+# Chaa GPU binary (compiles on the login node; no GPU needed)
+source tools/slurm/freya-gpu-env.sh
+cmake -B build-gpu -DCHAA_GPU=ON && cmake --build build-gpu
+
+# validation on an A100 node: GPU-vs-CPU comparison matrix + full suite
+sbatch tools/slurm/freya-gpu-tests.slurm
+
+# benchmarks: size scan + 1/2/4-GPU strong & weak scaling
+sbatch tools/slurm/freya-gpu-bench.slurm
+```
+
+Single-node runs drive all visible GPUs from one process
+(`CUDA_VISIBLE_DEVICES` selects a subset).  Multi-node runs launch one
+co-locale per GPU with the gasnet binary:
+
+```sh
+srun --mpi=pmix --ntasks-per-node=4 -n $((4*SLURM_NNODES)) \
+     build-gpu-gasnet/bin/chaa_real -nl $((4*SLURM_NNODES))
+```
+
+The `CHPL_RT_MAX_HEAP_SIZE`/PMIx caveats from section 5 apply
+unchanged; `CHPL_GPU_ARCH=sm_80` targets the A100s and `sm_70` the
+V100s in `p.gpu` (`sbatch tools/slurm/freya-gpu-bench-pgpu.slurm`).
+The P100 nodes are pre-Volta and **not supported**: Chaa's kernels
+exceed their 4 KB kernel-parameter limit (`ptxas` rejects sm_60).

@@ -24,6 +24,8 @@ module Restart {
   use Params, State, Particles, Forcing, SelfGravity;
   use IO, FileSystem;
   import IniReader;
+  import CompileParams;
+  import Gpu;
 
   param RST_MAGIC = 0x4348414152535432;   // "CHAARST2"
 
@@ -55,6 +57,12 @@ module Restart {
 
   proc writeRestart(t: real, step: int, dumpN: int,
                     nextOut: real) throws {
+    // GPU build: the devices own the interior — refresh the host copy
+    // (PHI and the forcing state are host-truth already)
+    if CompileParams.gpuEnabled then Gpu.gpuDownU();
+    // stale-metadata guard (network filesystems): make sure the
+    // output directory really exists before opening files in it
+    if !exists(outDir) then try { mkdir(outDir, parents=true); } catch { }
     // keep two generations: the previous restart becomes the .bak one
     if exists(restartPath()) {
       if exists(backupPath()) then remove(backupPath());

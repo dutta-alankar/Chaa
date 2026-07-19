@@ -3,7 +3,7 @@
 [![CI](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml/badge.svg)](https://github.com/dutta-alankar/Chaa/actions/workflows/ci.yml)
 [![docs](https://github.com/dutta-alankar/Chaa/actions/workflows/docs.yml/badge.svg)](https://dutta-alankar.github.io/Chaa/)
 
-**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide (grid, physics modules, boundaries, particles, plotting tools, running in parallel), architecture walkthrough, benchmarks, per-test results, cross-code validation, and a step-by-step guide to setting up your own problems.
+**Documentation: [dutta-alankar.github.io/Chaa](https://dutta-alankar.github.io/Chaa/)** — getting started, tutorial, user guide (grid, physics modules, boundaries, particles, plotting tools, running in parallel, running on GPUs), architecture walkthrough, benchmarks, per-test results, cross-code validation, and a step-by-step guide to setting up your own problems.
 
 Chaa is **cross-validated against Idefix and AthenaPK**: matched-configuration runs agree to L1 = 2.7×10⁻⁴ on Sod (vs 1.6×10⁻³ to the exact solution), 0.31 % on the double Mach reflection field, and 3×10⁻⁴ on the 3D Sedov radial profile — frozen reference profiles are re-checked in CI (`tests/reference/`).
 
@@ -157,9 +157,30 @@ cmake --build build             # -> build/bin/chaa
 ctest --test-dir build          # run the validated test suite
 ```
 
-Compile-time parameters (ghost-layer count, HDF5 support) live in
+Compile-time parameters (ghost-layer count, HDF5 support, GPU
+execution) live in
 [`src/compile_params.chpl`](src/compile_params.chpl) and map to CMake
-options (`-DCHAA_NG=…`, `-DCHAA_HDF5=…`).
+options (`-DCHAA_NG=…`, `-DCHAA_HDF5=…`, `-DCHAA_GPU=…`).
+
+### GPUs
+
+With a GPU-enabled Chapel (`CHPL_LOCALE_MODEL=gpu`, LLVM backend) the
+same source also builds a GPU binary — the CPU build is untouched:
+
+```sh
+cmake -B build-gpu -DCHAA_GPU=ON && cmake --build build-gpu
+CUDA_VISIBLE_DEVICES=0,1,2,3 ./build-gpu/bin/chaa --problem=sedov ...
+```
+
+One process drives all visible GPUs (the grid is split across them);
+multi-node runs use one co-locale per GPU over GASNet. The hot loops
+run as device kernels, all boundary conditions run unchanged on the
+host, and stop/resume restarts stay byte-identical. Setup (including
+building Chapel for GPUs and MPCDF/Freya SLURM scripts), validation
+and measured A100 performance:
+[Running on GPUs](https://dutta-alankar.github.io/Chaa/user-guide/gpu/)
+and
+[Benchmarks](https://dutta-alankar.github.io/Chaa/benchmarks/).
 
 ## Running
 
@@ -320,6 +341,9 @@ laptop:
 | Freya, across nodes (weak, 256³/node) | 8.5 → 14.9 → 24.9 → **44.1 Mcell/s** at 1→2→4→8 nodes (88/73/65 % efficiency; 512³ on 8 nodes) |
 | Freya, across nodes (strong, 256³) | 8.5 → 18.5 Mcell/s at 1→8 nodes — saturates when per-node blocks get small; use ≳8 M cells/node |
 | Freya, validation | the **full 47-case suite passes on a compute node** (3 m 44 s) |
+| Freya, one **A100 GPU** | 52 → **130 Mcell/s** at 128³→384³ — up to **8.8× the full 40-core node** |
+| Freya, 2× A100 (one process) | 192 Mcell/s weak (94 % eff.); V100 ≈ ⅓ of an A100 |
+| Freya, GPU validation | GPU-vs-CPU matrix to round-off + **46/46 suite cases on an A100** |
 | laptop (strong, 128³) | 2.79 → 9.18 Mcell/s at 1→4 threads (E-cores add nothing) |
 | laptop (gasnet-smp locales, fixed threads) | ~8 % total cost for splitting the box 4 ways |
 | multi-locale correctness | 4-locale fields match 1-locale to 2.6e-15; particle trajectories to 1e-12 |
@@ -349,6 +373,7 @@ src/SelfGravity.chpl      Poisson solver (CG on the FV metric Laplacian)
 src/Fargo.chpl            FARGO orbital advection (comoving flux + remap)
 src/Forcing.chpl          Ornstein-Uhlenbeck spectral turbulence driving
 src/Particles.chpl        distributed Lagrangian tracer particles
+src/Gpu.chpl              GPU engine: device blocks, staging, device BCs
 src/Problems.chpl         problem registry/dispatcher (+ body-force,
                           particle-init hooks)
 src/problems/*.chpl       one file per test problem (IC + user BCs)

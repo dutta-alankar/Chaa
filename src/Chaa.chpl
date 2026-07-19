@@ -12,15 +12,20 @@
  */
 module Chaa {
   use Params, Grid, State, Eos, Hydro, Boundary, Problems, Evolve, Output;
-  use Forcing, Particles, SelfGravity, Fargo, Restart;
+  use Forcing, Particles, SelfGravity, Fargo, Restart, Gpu;
   use Logo;
   use Time, FileSystem, Math;
-  use CommDiagnostics;
+  use CommDiagnostics, GpuDiagnostics;
   import Cli;
+  import CompileParams.gpuEnabled;
 
   /* --commDiag=true: count remote gets/puts/on-stmts over the time
      loop and print them per locale at the end (multi-locale tuning) */
   config const commDiag = false;
+
+  /* --gpuDiag=true (GPU build): count kernel launches and host<->device
+     transfers over the time loop and print them at the end */
+  config const gpuDiag = false;
 
   proc printBanner() {
     printLogo();
@@ -60,6 +65,10 @@ module Chaa {
     if useFargo then writeln("  fargo      : orbital advection on");
     writeln("  locales    : ", numLocales, "   tasks/locale: ",
             here.maxTaskPar);
+    if gpuEnabled then
+      writeln("  gpus       : ",
+              + reduce ([loc in Locales] loc.gpus.size),
+              " visible across ", numLocales, " locale(s)");
     writeln("=========================================================");
   }
 
@@ -107,6 +116,15 @@ module Chaa {
     if geom == Geom.spherical && act2 &&
        (x2min < -1.0e-12 || x2max > pi + 1.0e-12) then
       halt("spherical: theta must lie in [0, pi]");
+    if gpuEnabled {
+      if problem == "cylinderFlow" then
+        halt("cylinderFlow re-imposes internal (immersed) boundaries " +
+             "every stage on the host — not supported in the GPU " +
+             "build yet; use the CPU build");
+      if problemHasBodyForce then
+        halt("the problemBodyForce hook runs on the host — not " +
+             "supported in the GPU build yet; use the CPU build");
+    }
   }
 
   proc main(args: [] string) {
@@ -144,8 +162,38 @@ module Chaa {
                   then restartDt*(floor(t/restartDt) + 1.0)
                   else 0.0;
 
+    /* GPU build: carve the grid into per-device blocks and upload the
+       (possibly restart-restored) state; from here on the devices own
+       the interior and the host arrays are refreshed on demand */
+    gpuInit();
+    if gpuEnabled {
+      /* every hot loop must actually run as a device kernel — an
+         ineligible loop silently falls back to the host and reads
+         device memory element-wise (~1000x slower, not wrong).  Count
+         the launches of one full RHS + dt evaluation: per block
+         that is 1 (zero) + 3 per active dim (recon+solve+div)
+         + 1 (sources) + 2 (dt kernel + reduction). */
+      startGpuDiagnostics();
+      computeRHS(0.0);
+      computeDt();
+      stopGpuDiagnostics();
+      const gd = getGpuDiagnostics();
+      var launches = 0;
+      for x in gd do launches += x.kernel_launch: int;
+      const expected = (4 + 3*ndim)*nGpuTotal;
+      if launches < expected then
+        halt("GPU eligibility check failed: only ", launches,
+             " kernel launches for one RHS+dt evaluation (expected ",
+             expected, ") — a hot loop fell back to host execution; ",
+             "recompile with --report-gpu to identify it");
+      writeln("  gpu        : eligibility check ok (", launches,
+              " kernel launches per RHS+dt across ", nGpuTotal,
+              " device(s))");
+    }
+
     var stopped = false;
     if commDiag then startCommDiagnostics();
+    if gpuEnabled && gpuDiag then startGpuDiagnostics();
     /* the reported Mcell-updates/s measures the evolution loop only
        (initial/final output and restart I/O excluded) */
     var sw: stopwatch;
@@ -154,13 +202,26 @@ module Chaa {
     while t < tstop*(1.0 - 1.0e-12) && step < maxSteps {
       dt = min(dt, tstop - t);
       updateForcing(dt);
-      solveGravity();
+      if gpuEnabled && forceAmp > 0.0 then gpuUpForcing();
+      if gpuEnabled && sgFourPiG > 0.0 {
+        // the CG solve stays on the host: pull the density, push the
+        // refreshed potential to the devices
+        gpuDownV();
+        solveGravity();
+        gpuUpPhi();
+      } else {
+        solveGravity();
+      }
       advance(dt, t);
       if useFargo {
+        // FARGO's row remap stages through the host in the GPU build
+        if gpuEnabled then gpuDownU();
         fargoShift(dt);
         applyFloorsAndPrims();
         applyBCs(t + dt);
+        if gpuEnabled then gpuUpAll();
       }
+      if gpuEnabled && nParticles > 0 then gpuDownV();
       advanceParticles(dt, t);
       t += dt;
       step += 1;
@@ -198,9 +259,22 @@ module Chaa {
       for l in 0..#numLocales do
         writeln("commDiag locale ", l, ": ", d[l]);
     }
+    if gpuEnabled && gpuDiag {
+      stopGpuDiagnostics();
+      const d = getGpuDiagnostics();
+      for l in 0..#numLocales do
+        writeln("gpuDiag locale ", l, ": ", d[l]);
+    }
+    if gpuEnabled then gpuPrintTimers();
     if !stopped {
       writeOutputs(dumpN, t);
-      try! writeRestart(t, step, dumpN + 1, nextOut);
+      // a failed restart write (quota, stale filesystem metadata)
+      // must not kill an otherwise complete run
+      try {
+        writeRestart(t, step, dumpN + 1, nextOut);
+      } catch e {
+        writeln("WARNING: final restart write failed: ", e.message());
+      }
     }
 
     const ncells = nx1*nx2*nx3;

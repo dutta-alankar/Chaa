@@ -17,4 +17,10 @@ module CompileParams {
   /* number of passive tracer (scalar colour) fields advected with the
      flow; they ride in the state vector after the five hydro slots */
   config param NSCAL = 1;
+
+  /* GPU execution: hand the hot loops to the locale's GPUs (sub-locales).
+     Requires a Chapel built with CHPL_LOCALE_MODEL=gpu; compile with
+     -sgpuEnabled=true (CMake: -DCHAA_GPU=ON).  The CPU code path is
+     untouched when this is false (the default). */
+  config param gpuEnabled = false;
 }

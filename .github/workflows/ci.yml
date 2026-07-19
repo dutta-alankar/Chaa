@@ -85,6 +85,31 @@ jobs:
       - name: run 3 locales, combine pieces, compare with 1-locale reference
         run: tests/run_multilocale_combine.sh 3
 
+  gpu-compare:
+    name: GPU path vs CPU (cpu-as-device)
+    runs-on: ubuntu-latest
+    container:
+      image: chapel/chapel:2.8.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: install deps
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq make cmake libhdf5-dev \
+            python3-numpy python3-h5py > /dev/null
+      - name: build cpu-as-device GPU Chapel runtime
+        run: |
+          export CHPL_HOME=$(chpl --print-chpl-home)
+          cd "$CHPL_HOME"
+          CHPL_LOCALE_MODEL=gpu CHPL_GPU=cpu make -j4 runtime
+      - name: build chaa (CPU + GPU binaries)
+        run: |
+          cmake -B build && cmake --build build
+          export CHPL_LOCALE_MODEL=gpu CHPL_GPU=cpu
+          cmake -B build-gpu -DCHAA_GPU=ON && cmake --build build-gpu
+      - name: run the GPU-vs-CPU comparison matrix
+        run: tests/run_gpu_compare.sh
+
   test:
     name: ${{ matrix.case }}
     needs: build

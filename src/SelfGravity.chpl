@@ -129,19 +129,21 @@ module SelfGravity {
   }
 
   /* acceleration g = -grad(Phi), central differences, physical lengths;
-     components along the local orthonormal coordinate directions */
-  inline proc sgAccel(i: int, j: int, k: int): 3*real {
+     components along the local orthonormal coordinate directions.
+     The potential is passed in so the same code runs on the module's
+     host array and on a GPU block's device copy. */
+  inline proc sgAccel(const ref PH, i: int, j: int, k: int): 3*real {
     var g: 3*real;
     if act1 then
-      g(0) = -(PHI[i+1,j,k] - PHI[i-1,j,k])/(x1c(i+1) - x1c(i-1));
+      g(0) = -(PH[i+1,j,k] - PH[i-1,j,k])/(x1c(i+1) - x1c(i-1));
     if act2 {
       const m = if geom == Geom.polar || geom == Geom.spherical
                 then x1c(i) else 1.0;
-      g(1) = -(PHI[i,j+1,k] - PHI[i,j-1,k])/(m*(x2c(j+1) - x2c(j-1)));
+      g(1) = -(PH[i,j+1,k] - PH[i,j-1,k])/(m*(x2c(j+1) - x2c(j-1)));
     }
     if act3 {
       const m = if geom == Geom.spherical then x1c(i)*sin(x2c(j)) else 1.0;
-      g(2) = -(PHI[i,j,k+1] - PHI[i,j,k-1])/(m*(x3c(k+1) - x3c(k-1)));
+      g(2) = -(PH[i,j,k+1] - PH[i,j,k-1])/(m*(x3c(k+1) - x3c(k-1)));
     }
     return g;
   }

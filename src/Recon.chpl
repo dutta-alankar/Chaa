@@ -38,8 +38,11 @@ module Recon {
   }
 
   /* LimO3 limiter value (multiplies dvp); Cada & Torrilhon 2009 with
-     the radius-of-curvature switch, as implemented in Idefix */
-  inline proc limO3Lim(dvp: real, dvm: real, dx: real): real {
+     the radius-of-curvature switch, as implemented in Idefix.
+     Not inline (pure function): inlining the big reconstruction
+     bodies into the GPU flux kernel overflows the 32 KB
+     kernel-parameter limit (see Riemann.chpl). */
+  proc limO3Lim(dvp: real, dvm: real, dx: real): real {
     param rad = 0.1, eps = 1.0e-12;
     const th = dvm/(dvp + 1.0e-16);
     const q = (2.0 + th)/3.0;
@@ -116,10 +119,11 @@ module Recon {
   }
 
   /* parabolic face values of cell "0" with extremum-preserving
-     limiting (PH13 3.26-3.32); vl = left face, vr = right face */
-  inline proc ppmStates(vm2: real, vm1: real, v0: real,
-                        vp1: real, vp2: real,
-                        out vl: real, out vr: real) {
+     limiting (PH13 3.26-3.32); vl = left face, vr = right face.
+     Not inline (pure function — see limO3Lim). */
+  proc ppmStates(vm2: real, vm1: real, v0: real,
+                 vp1: real, vp2: real,
+                 out vl: real, out vr: real) {
     param n = 2;
 
     vr = 7.0/12.0*(v0 + vp1) - 1.0/12.0*(vm1 + vp2);
@@ -160,9 +164,10 @@ module Recon {
   /* ----------------------------- WENO-Z ----------------------------- */
 
   /* fifth-order WENO-Z (Borges et al. 2008) right-face value of the
-     centre cell of the 5-point stencil */
-  inline proc wenozFace(vm2: real, vm1: real, v0: real,
-                        vp1: real, vp2: real): real {
+     centre cell of the 5-point stencil.
+     Not inline (pure function — see limO3Lim). */
+  proc wenozFace(vm2: real, vm1: real, v0: real,
+                 vp1: real, vp2: real): real {
     param eps = 1.0e-40;
     const b0 = 13.0/12.0*(vm2 - 2.0*vm1 + v0)**2
              + 0.25*(vm2 - 4.0*vm1 + 3.0*v0)**2;
@@ -196,6 +201,62 @@ module Recon {
       for param v in 0..NTOT-1 {
         wL(v) = wenozFace(wm3(v), wmm(v), wm(v), wc(v), wp(v));
         // mirrored stencil for the right state
+        wR(v) = wenozFace(wpp(v), wp(v), wc(v), wm(v), wmm(v));
+      }
+    }
+    if wL(IRHO) <= 0.0 || wL(IPRS) <= 0.0 then wL = wm;
+    if wR(IRHO) <= 0.0 || wR(IPRS) <= 0.0 then wR = wc;
+  }
+
+  /* ---- compile-time-specialized variants (GPU flux path) -----------
+     The GPU pipeline dispatches the runtime scheme code to a param so
+     each device kernel only carries one reconstruction (register
+     pressure: the all-scheme kernel spills ~10 KB of locals per
+     thread).  The CPU path keeps the runtime-select versions above. */
+  inline proc faceStatesP(param rc: int, wmm: StateVec, wm: StateVec,
+                          wc: StateVec, wp: StateVec, dx: real,
+                          out wL: StateVec, out wR: StateVec) {
+    if rc == RECON_LINEAR {
+      for param v in 0..NTOT-1 {
+        wL(v) = wm(v) + 0.5*limitedSlope(wmm(v), wm(v), wc(v));
+        wR(v) = wc(v) - 0.5*limitedSlope(wm(v),  wc(v), wp(v));
+      }
+      if wL(IRHO) <= 0.0 || wL(IPRS) <= 0.0 then wL = wm;
+      if wR(IRHO) <= 0.0 || wR(IPRS) <= 0.0 then wR = wc;
+    } else if rc == RECON_LIMO3 {
+      for param v in 0..NTOT-1 {
+        var dvm = wm(v) - wmm(v);
+        var dvp = wc(v) - wm(v);
+        wL(v) = wm(v) + 0.5*dvp*limO3Lim(dvp, dvm, dx);
+        if (v == IRHO || v == IPRS) && wL(v) <= 0.0 then
+          wL(v) = wm(v) + 0.5*minmod2(dvm, dvp);
+        dvm = dvp;
+        dvp = wp(v) - wc(v);
+        wR(v) = wc(v) - 0.5*dvm*limO3Lim(dvm, dvp, dx);
+        if (v == IRHO || v == IPRS) && wR(v) <= 0.0 then
+          wR(v) = wc(v) - 0.5*minmod2(dvm, dvp);
+      }
+    } else {                       // constant / donor cell
+      wL = wm;
+      wR = wc;
+    }
+  }
+
+  inline proc faceStates6P(param rc: int, wm3: StateVec, wmm: StateVec,
+                           wm: StateVec, wc: StateVec, wp: StateVec,
+                           wpp: StateVec,
+                           out wL: StateVec, out wR: StateVec) {
+    if rc == RECON_PPM {
+      for param v in 0..NTOT-1 {
+        var dum, vlm, vrm: real;
+        ppmStates(wm3(v), wmm(v), wm(v), wc(v), wp(v), vlm, vrm);
+        wL(v) = vrm;                       // right face of cell m
+        ppmStates(wmm(v), wm(v), wc(v), wp(v), wpp(v), vlm, dum);
+        wR(v) = vlm;                       // left face of cell c
+      }
+    } else {                               // wenoz
+      for param v in 0..NTOT-1 {
+        wL(v) = wenozFace(wm3(v), wmm(v), wm(v), wc(v), wp(v));
         wR(v) = wenozFace(wpp(v), wp(v), wc(v), wm(v), wmm(v));
       }
     }

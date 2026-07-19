@@ -91,6 +91,92 @@ default 2×2×2 locale grid on 8 locales cuts the memory-fastest axis
 into tens of thousands of tiny strided RDMAs and cost a third of the
 8-node throughput).
 
+## Freya GPUs (NVIDIA A100 and V100)
+
+**Hardware & software.** Freya's `p.gpu.ampere` partition has 4×
+NVIDIA **A100**-PCIE-40GB per node (48 cores, 380 GB); `p.gpu` has 2×
+**V100**-PCIE-32GB.  The GPU binaries are compiled by a separate
+Chapel 2.8 installation (bundled LLVM 19, CUDA 12.8,
+`CHPL_LOCALE_MODEL=gpu`, one tree per GPU architecture) with
+`-DCHAA_GPU=ON`; the same benchmark problem and metric as the CPU
+campaigns (3D Cartesian Sedov, evolution loop only).  Setup and
+reproduction: [Running on Freya](freya.md) and
+[Running on GPUs](user-guide/gpu.md).
+
+**Correctness first:** on an A100 the GPU binary passes the whole
+GPU-vs-CPU comparison matrix (15 configurations, agreement to
+round-off, bit-identical stop/resume restart) **and the full
+validated test suite: 46 passed, 0 failed** (`cylinder-flow` skipped
+— internal BCs are CPU-only).
+
+### Single GPU (throughput vs problem size)
+
+| grid | A100 (Mcell/s) | V100 (Mcell/s) |
+|---|---|---|
+| 128³ | 52.5 | 21.6 |
+| 192³ | 79.4 | 29.2 |
+| 256³ | 102.0 | 32.4 |
+| 320³ | 118.0 | — |
+| 384³ | 129.9 | — (>32 GB) |
+
+A single A100 reaches **129.9 Mcell/s** at 384³ — **8.8× the full
+40-core CPU node** (14.8 Mcell/s).  Throughput keeps rising with
+problem size as the fixed per-step costs (kernel launches, the
+host-staged x1 ghost planes) amortise; a V100 delivers about a third
+of an A100, consistent with its memory bandwidth.
+
+![A100 benchmarks](assets/plots/freya-gpu-a100.png)
+
+### Multiple GPUs in one node (one process)
+
+One process drives all GPUs that `CUDA_VISIBLE_DEVICES` exposes; the
+grid splits across them along x1.
+
+| GPUs | strong, 256³ total | weak, 256³ per GPU |
+|---|---|---|
+| 1× A100 | 102.4 | 101.9 |
+| 2× A100 | 134.3 (1.31×) | 192.2 (94 % eff.) |
+| 1× V100 | 31.6 | — |
+| 2× V100 | 51.4 (1.63×) | — |
+
+Weak scaling over two GPUs is near-ideal; strong scaling at 256³ is
+partial because each block still exchanges its x1 ghost planes
+through the host.  **Four GPUs in one process currently fault**
+(CUDA "invalid resource handle", a Chapel 2.8 runtime limitation with
+>2 concurrently driven devices) — use one locale per node (or per
+GPU pair) and scale across nodes instead.
+
+![V100 benchmarks](assets/plots/freya-gpu-v100.png)
+
+### Across nodes (GASNet/ibv, one locale per node)
+
+Two A100 nodes with one Chapel locale each driving 2 GPUs (the same
+`srun --mpi=pmix` launch as the CPU campaign, plus
+`GASNET_PHYSMEM_MAX` — the GPU runtime's pinnable-memory probe must
+be capped inside a job cgroup) run **correctly** — the multi-node GPU
+configuration reproduces the single-locale results — but currently
+**slowly**: ~4.2 Mcell/s on 2 nodes × 2 GPUs (256×128×128), far below
+a single GPU.  Every stage's x1 ghost exchange travels
+device → host → Omni-Path → host → device through the `StencilDist`
+halo machinery, and at GPU speeds that staging dominates the step.
+Scaling GPUs *within* a node is efficient (above); across nodes the
+current implementation is a correctness feature, not a performance
+one — direct device-to-device halo exchange is future work.
+
+### GPU performance lessons
+
+Four Chapel-2.8 GPU findings from this campaign are baked into the
+code (details in [Running on GPUs](user-guide/gpu.md)):
+kernels iterate a **flattened 1D index space** (a multidimensional
+forall runs ~50–100× below memory bandwidth on device); the flux
+evaluation is **split into reconstruction/solve kernels specialised
+per scheme** (the fused kernel spills ~16 KB of locals per thread and
+overflows the 32 KB kernel-parameter limit); **standard x2/x3
+boundary conditions run on the device** (host-staging them throttled
+even single-GPU runs by ~25 %); and `select` on an enum constant
+inside inlined procs **miscompiles in device kernels** (if-chains are
+used throughout the metric functions).
+
 ## Apple-silicon laptop (8 cores: 4 performance + 4 efficiency)
 
 Measured with `tools/bench.sh`, Chapel 2.8 (LLVM backend), macOS.

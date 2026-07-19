@@ -100,7 +100,18 @@ fields, `python tools/plot_compare.py <kind> test-output/<case>` for an
 overlay on the analytic solution where one exists (see
 [Plotting & analysis](user-guide/plotting.md)).
 
-Beyond the per-case matrix, CI also runs a **multi-locale integration
+Beyond the per-case matrix, CI also runs a **GPU comparison job**
+(`tests/run_gpu_compare.sh`): it builds a `CHPL_LOCALE_MODEL=gpu`
+cpu-as-device Chapel runtime in the container, compiles the GPU binary
+(`-DCHAA_GPU=ON`) and requires 15 configurations — covering every
+reconstruction/integrator/Riemann solver, curvilinear geometry,
+viscosity, conduction, cooling, the isothermal EOS, user BCs, OU
+forcing, particles, FARGO and self-gravity — to match the CPU binary
+to round-off, plus a bit-identical stop/resume restart continuation
+(the same script validated real A100 GPUs on Freya; see
+[Running on GPUs](user-guide/gpu.md)).
+
+CI also runs a **multi-locale integration
 job**: it builds a gasnet (smp) Chapel runtime in the container, runs
 Cartesian and curvilinear problems on **multiple locales** (3, clamped
 to the runner's physical core count), combines the

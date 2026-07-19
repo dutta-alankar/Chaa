@@ -7,6 +7,11 @@
 
 #include <stdint.h>
 
+/* GPU builds compile the generated glue as C++ — keep C linkage */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int     H5open(void);
 int64_t H5Fcreate(const char *name, unsigned flags, int64_t fcpl,
                   int64_t fapl);
@@ -21,5 +26,9 @@ int     H5Dwrite(int64_t dset, int64_t memtype, int64_t memspace,
 int     H5Dclose(int64_t d);
 
 extern int64_t H5T_NATIVE_DOUBLE_g;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

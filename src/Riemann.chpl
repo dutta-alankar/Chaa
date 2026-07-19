@@ -19,6 +19,21 @@ module Riemann {
     return f;
   }
 
+  /* compile-time-specialized variant (GPU flux path): each device
+     kernel carries a single solver — the all-solver kernel spills
+     several KB of locals per thread (see Recon.faceStatesP) */
+  inline proc riemannFluxP(param rs: int, wL: StateVec, wR: StateVec,
+                           dir: int): StateVec {
+    var f: StateVec;
+    if rs == RS_LLF        then f = llf(wL, wR, dir);
+    else if rs == RS_HLL   then f = hll(wL, wR, dir);
+    else if rs == RS_EXACT then f = exact(wL, wR, dir);
+    else                        f = hllc(wL, wR, dir);
+    for param s in ISC..NTOT-1 do
+      f(s) = (if f(IRHO) >= 0.0 then wL(s) else wR(s))*f(IRHO);
+    return f;
+  }
+
   inline proc llf(wL: StateVec, wR: StateVec, dir: int): StateVec {
     const uL = prim2cons(wL), uR = prim2cons(wR);
     const fL = physFlux(wL, dir), fR = physFlux(wR, dir);
@@ -95,43 +110,57 @@ module Riemann {
     return f;
   }
 
-  /* ---------------- exact (Godunov) Riemann solver ------------------- */
+  /* ---------------- exact (Godunov) Riemann solver -------------------
+   *
+   * The helpers below are deliberately NOT inline and take every
+   * runtime constant (gam, prsFloor, the EOS mode) as an explicit
+   * argument: Chapel outlines one GPU-kernel parameter per inlined
+   * reference to an outer constant, and inlining the whole iterative
+   * solver into the flux kernel overflows the 32 KB kernel-parameter
+   * limit.  As self-contained functions they compile to plain device
+   * calls and contribute nothing to the kernel's parameter list.   */
+
+  private proc soundSpeedG(w: StateVec, g: real, iso: bool): real {
+    if iso then return sqrt(w(IPRS)/w(IRHO));
+    return sqrt(g*w(IPRS)/w(IRHO));
+  }
 
   /* Toro's pressure function f_K(p) and its derivative for state K */
-  private inline proc pressFn(p: real, rho: real, pk: real, ck: real,
-                              out f: real, out df: real) {
+  private proc pressFn(p: real, rho: real, pk: real, ck: real, g: real,
+                       out f: real, out df: real) {
     if p > pk {                                   // shock
-      const A = 2.0/((gam + 1.0)*rho);
-      const B = (gam - 1.0)/(gam + 1.0)*pk;
+      const A = 2.0/((g + 1.0)*rho);
+      const B = (g - 1.0)/(g + 1.0)*pk;
       const sq = sqrt(A/(p + B));
       f  = (p - pk)*sq;
       df = sq*(1.0 - 0.5*(p - pk)/(B + p));
     } else {                                      // rarefaction
-      f  = 2.0*ck/(gam - 1.0)*((p/pk)**((gam - 1.0)/(2.0*gam)) - 1.0);
-      df = (p/pk)**(-(gam + 1.0)/(2.0*gam))/(rho*ck);
+      f  = 2.0*ck/(g - 1.0)*((p/pk)**((g - 1.0)/(2.0*g)) - 1.0);
+      df = (p/pk)**(-(g + 1.0)/(2.0*g))/(rho*ck);
     }
   }
 
   /* star-region pressure and velocity (Newton-Raphson) */
-  private inline proc starState(wL: StateVec, wR: StateVec, dir: int,
-                                out ps: real, out us: real) {
+  private proc starState(wL: StateVec, wR: StateVec, dir: int,
+                         g: real, pf: real, iso: bool,
+                         out ps: real, out us: real) {
     const rhoL = wL(IRHO), rhoR = wR(IRHO);
     const uL = wL(IVX1+dir), uR = wR(IVX1+dir);
     const pL = wL(IPRS), pR = wR(IPRS);
-    const cL = soundSpeed(wL), cR = soundSpeed(wR);
+    const cL = soundSpeedG(wL, g, iso), cR = soundSpeedG(wR, g, iso);
 
-    var p = max(0.5*(pL + pR), prsFloor);
+    var p = max(0.5*(pL + pR), pf);
     var fL, dfL, fR, dfR: real;
     for 1..60 {
-      pressFn(p, rhoL, pL, cL, fL, dfL);
-      pressFn(p, rhoR, pR, cR, fR, dfR);
+      pressFn(p, rhoL, pL, cL, g, fL, dfL);
+      pressFn(p, rhoR, pR, cR, g, fR, dfR);
       const dp = (fL + fR + (uR - uL))/(dfL + dfR);
       p = max(p - dp, 1.0e-14);
       if abs(dp) < 1.0e-12*p then break;
     }
     ps = p;
-    pressFn(p, rhoL, pL, cL, fL, dfL);
-    pressFn(p, rhoR, pR, cR, fR, dfR);
+    pressFn(p, rhoL, pL, cL, g, fL, dfL);
+    pressFn(p, rhoR, pR, cR, g, fR, dfR);
     us = 0.5*(uL + uR) + 0.5*(fR - fL);
   }
 
@@ -139,16 +168,16 @@ module Riemann {
      return (rho, un, p); transverse velocities are upwinded across the
      contact by the caller */
   private proc sampleFace(wL: StateVec, wR: StateVec, dir: int,
-                          ps: real, us: real,
+                          g: real, iso: bool, ps: real, us: real,
                           out rho: real, out un: real, out p: real) {
-    const g1 = (gam - 1.0)/(gam + 1.0);
-    const g2 = (gam - 1.0)/(2.0*gam);
+    const g1 = (g - 1.0)/(g + 1.0);
+    const g2 = (g - 1.0)/(2.0*g);
 
     if us >= 0.0 {                                // face lies left of contact
       const rhoK = wL(IRHO), uK = wL(IVX1+dir), pK = wL(IPRS);
-      const cK = soundSpeed(wL);
+      const cK = soundSpeedG(wL, g, iso);
       if ps > pK {                                // left shock
-        const sK = uK - cK*sqrt((gam + 1.0)/(2.0*gam)*ps/pK + g2);
+        const sK = uK - cK*sqrt((g + 1.0)/(2.0*g)*ps/pK + g2);
         if sK >= 0.0 then { rho = rhoK; un = uK; p = pK; return; }
         rho = rhoK*((ps/pK + g1)/(g1*ps/pK + 1.0));
         un = us; p = ps; return;
@@ -158,20 +187,20 @@ module Riemann {
       if sh >= 0.0 then { rho = rhoK; un = uK; p = pK; return; }
       const cs = cK*(ps/pK)**g2;
       if us - cs <= 0.0 {                         // left of/at the contact
-        rho = rhoK*(ps/pK)**(1.0/gam); un = us; p = ps; return;
+        rho = rhoK*(ps/pK)**(1.0/g); un = us; p = ps; return;
       }
       // inside the fan
-      un = 2.0/(gam + 1.0)*(cK + (gam - 1.0)/2.0*uK);
-      const c = 2.0/(gam + 1.0)*(cK + (gam - 1.0)/2.0*uK);
-      rho = rhoK*(c/cK)**(2.0/(gam - 1.0));
-      p = pK*(c/cK)**(2.0*gam/(gam - 1.0));
+      un = 2.0/(g + 1.0)*(cK + (g - 1.0)/2.0*uK);
+      const c = 2.0/(g + 1.0)*(cK + (g - 1.0)/2.0*uK);
+      rho = rhoK*(c/cK)**(2.0/(g - 1.0));
+      p = pK*(c/cK)**(2.0*g/(g - 1.0));
       return;
     }
     // face lies right of the contact (mirror)
     const rhoK = wR(IRHO), uK = wR(IVX1+dir), pK = wR(IPRS);
-    const cK = soundSpeed(wR);
+    const cK = soundSpeedG(wR, g, iso);
     if ps > pK {                                  // right shock
-      const sK = uK + cK*sqrt((gam + 1.0)/(2.0*gam)*ps/pK + g2);
+      const sK = uK + cK*sqrt((g + 1.0)/(2.0*g)*ps/pK + g2);
       if sK <= 0.0 then { rho = rhoK; un = uK; p = pK; return; }
       rho = rhoK*((ps/pK + g1)/(g1*ps/pK + 1.0));
       un = us; p = ps; return;
@@ -181,18 +210,19 @@ module Riemann {
     if sh <= 0.0 then { rho = rhoK; un = uK; p = pK; return; }
     const cs = cK*(ps/pK)**g2;
     if us + cs >= 0.0 {
-      rho = rhoK*(ps/pK)**(1.0/gam); un = us; p = ps; return;
+      rho = rhoK*(ps/pK)**(1.0/g); un = us; p = ps; return;
     }
-    un = 2.0/(gam + 1.0)*(-cK + (gam - 1.0)/2.0*uK);
-    const c = 2.0/(gam + 1.0)*(cK - (gam - 1.0)/2.0*uK);
-    rho = rhoK*(c/cK)**(2.0/(gam - 1.0));
-    p = pK*(c/cK)**(2.0*gam/(gam - 1.0));
+    un = 2.0/(g + 1.0)*(-cK + (g - 1.0)/2.0*uK);
+    const c = 2.0/(g + 1.0)*(cK - (g - 1.0)/2.0*uK);
+    rho = rhoK*(c/cK)**(2.0/(g - 1.0));
+    p = pK*(c/cK)**(2.0*g/(g - 1.0));
   }
 
   inline proc exact(wL: StateVec, wR: StateVec, dir: int): StateVec {
     var ps, us, rho, un, p: real;
-    starState(wL, wR, dir, ps, us);
-    sampleFace(wL, wR, dir, ps, us, rho, un, p);
+    const iso = eosCode == EOS_ISO;
+    starState(wL, wR, dir, gam, prsFloor, iso, ps, us);
+    sampleFace(wL, wR, dir, gam, iso, ps, us, rho, un, p);
 
     // assemble the face primitive state; transverse components ride
     // with the flow across the contact

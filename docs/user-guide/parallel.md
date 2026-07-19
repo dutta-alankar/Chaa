@@ -58,10 +58,10 @@ precision (max |Δρ| = 2.6×10⁻¹⁵ after piece reassembly) and
 single-locale particle trajectories to 10⁻¹². On a production cluster
 (MPCDF Freya, Omni-Path) the full test suite passes on a compute node
 and a 512³ box reaches 44 Mcell/s across 8 nodes
-([benchmarks](../benchmarks.md)); the complete cluster recipe — Chapel
-build, GASNet/PMIx launch pattern, SLURM templates and the pitfalls —
-is in
-[`tools/slurm/README.md`](https://github.com/dutta-alankar/Chaa/blob/main/tools/slurm/README.md).
+([benchmarks](../benchmarks.md)); the complete cluster recipe — the
+Chapel builds for single-locale, multi-locale and GPU programs, the
+GASNet/PMIx launch pattern, SLURM templates and the pitfalls — is in
+[Running on Freya (MPCDF)](../freya.md).
 
 ## Parallel I/O
 
@@ -100,3 +100,9 @@ Notes:
   cases at partition boundaries;
 - the geometry is closed-form (no coordinate arrays), so metric
   evaluations are communication-free on any locale.
+
+!!! tip
+    The same binary layout extends to GPUs: a compile-time flag
+    (`-DCHAA_GPU=ON`) hands the hot loops to the locale's GPUs, with
+    one co-locale per GPU on multi-node runs — see
+    [Running on GPUs](gpu.md).

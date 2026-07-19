@@ -103,14 +103,19 @@ module Forcing {
     }
   }
 
-  /* acceleration at a cell centre */
-  inline proc forceAccel(i: int, j: int, k: int): 3*real {
+  /* acceleration at a cell centre.  The mode tables are passed in so
+     the same code runs on the module's host arrays and on a GPU
+     block's device copies. */
+  inline proc forceAccel(const ref fkv, const ref fe1, const ref fe2,
+                         const ref fph, const ref fa1, const ref fa2,
+                         nm: int, i: int, j: int, k: int): 3*real {
     var a: 3*real;
     const p = physPos(i, j, k);
-    for m in 0..#nModes {
-      const c = cos(kv[m](0)*p(0) + kv[m](1)*p(1) + kv[m](2)*p(2) + phs[m]);
+    for m in 0..#nm {
+      const c = cos(fkv[m](0)*p(0) + fkv[m](1)*p(1) + fkv[m](2)*p(2)
+                    + fph[m]);
       for param d in 0..2 do
-        a(d) += c*(am1[m]*e1v[m](d) + am2[m]*e2v[m](d));
+        a(d) += c*(fa1[m]*fe1[m](d) + fa2[m]*fe2[m](d));
     }
     return a;
   }

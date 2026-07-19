@@ -146,26 +146,24 @@ module Grid {
   }
 
   /* ---- direction 1 (x | R | r) ---- */
+  /* NOTE: geometry branches use if-chains, not `select`: Chapel 2.8
+     miscompiles `select` on an enum constant inside inlined procs in
+     GPU kernels (the wrong branch is taken on the device). */
   inline proc fA1(i: int): real {
-    select geom {
-      when Geom.cartesian                  do return 1.0;
-      when Geom.cylindrical, Geom.polar    do return abs(x1f(i));
-      when Geom.spherical                  do return x1f(i)**2;
-    }
+    if geom == Geom.spherical then return x1f(i)**2;
+    if geom == Geom.cylindrical || geom == Geom.polar then
+      return abs(x1f(i));
     return 1.0;
   }
 
   inline proc invV1(i: int): real {
-    select geom {
-      when Geom.cartesian do return 1.0/dx1At(i);
-      when Geom.cylindrical, Geom.polar {
-        const rm = x1f(i), rp = x1f(i+1);
-        return 2.0/abs(rp**2 - rm**2);
-      }
-      when Geom.spherical {
-        const rm = x1f(i), rp = x1f(i+1);
-        return 3.0/(rp**3 - rm**3);
-      }
+    if geom == Geom.spherical {
+      const rm = x1f(i), rp = x1f(i+1);
+      return 3.0/(rp**3 - rm**3);
+    }
+    if geom == Geom.cylindrical || geom == Geom.polar {
+      const rm = x1f(i), rp = x1f(i+1);
+      return 2.0/abs(rp**2 - rm**2);
     }
     return 1.0/dx1At(i);
   }
@@ -173,14 +171,12 @@ module Grid {
   /* radius used in geometric source terms; chosen so that uniform
      pressure exactly balances the area-weighted flux divergence */
   inline proc rGeo(i: int): real {
-    select geom {
-      when Geom.cylindrical, Geom.polar do return x1c(i);
-      when Geom.spherical {
-        const rm = x1f(i), rp = x1f(i+1);
-        return (2.0/3.0)*(rp**3 - rm**3)/(rp**2 - rm**2);
-      }
-      otherwise do return 1.0;
+    if geom == Geom.spherical {
+      const rm = x1f(i), rp = x1f(i+1);
+      return (2.0/3.0)*(rp**3 - rm**3)/(rp**2 - rm**2);
     }
+    if geom == Geom.cylindrical || geom == Geom.polar then
+      return x1c(i);
     return 1.0;
   }
 
@@ -198,11 +194,8 @@ module Grid {
 
   /* extra 1/r factor multiplying the direction-2 divergence */
   inline proc g2(i: int): real {
-    select geom {
-      when Geom.polar     do return 1.0/x1c(i);
-      when Geom.spherical do return 1.0/rGeo(i);
-      otherwise           do return 1.0;
-    }
+    if geom == Geom.polar then return 1.0/x1c(i);
+    if geom == Geom.spherical then return 1.0/rGeo(i);
     return 1.0;
   }
 
@@ -224,31 +217,22 @@ module Grid {
 
   /* extra metric factor multiplying the direction-3 divergence */
   inline proc g3(i: int, j: int): real {
-    select geom {
-      when Geom.spherical do return 1.0/(rGeo(i)*sinGeo(j));
-      otherwise           do return 1.0;   // polar x3=z, cartesian x3=z
-    }
-    return 1.0;
+    if geom == Geom.spherical then return 1.0/(rGeo(i)*sinGeo(j));
+    return 1.0;                            // polar x3=z, cartesian x3=z
   }
 
   /* ---- physical (linear) cell sizes, for the CFL condition ---- */
   inline proc dl1(i: int): real do return dx1At(i);
 
   inline proc dl2(i: int, j: int): real {
-    select geom {
-      when Geom.polar     do return x1c(i)*dx2At(j);
-      when Geom.spherical do return x1c(i)*dx2At(j);
-      otherwise           do return dx2At(j);
-    }
+    if geom == Geom.polar || geom == Geom.spherical then
+      return x1c(i)*dx2At(j);
     return dx2At(j);
   }
 
   inline proc dl3(i: int, j: int, k: int): real {
-    select geom {
-      when Geom.spherical do return x1c(i)*sinGeo(j)*dx3At(k);
-      otherwise           do return dx3At(k);   // polar: x3 = z
-    }
-    return dx3At(k);
+    if geom == Geom.spherical then return x1c(i)*sinGeo(j)*dx3At(k);
+    return dx3At(k);                             // polar: x3 = z
   }
 
   /* ---- true cell volume; inactive angular dimensions contribute their
@@ -284,38 +268,30 @@ module Grid {
   /* ---- physical position of a cell centre, mapped to Cartesian-like
      coordinates (used for initial conditions / distances) ---- */
   inline proc physPos(i: int, j: int, k: int): 3*real {
-    select geom {
-      when Geom.cartesian {
-        return (x1c(i), if act2 then x2c(j) else 0.0,
-                        if act3 then x3c(k) else 0.0);
-      }
-      when Geom.cylindrical {            // meridional (R, z) plane
-        return (x1c(i), if act2 then x2c(j) else 0.0, 0.0);
-      }
-      when Geom.polar {
-        const R = x1c(i);
-        const ph = if act2 then x2c(j) else 0.0;
-        return (R*cos(ph), R*sin(ph), if act3 then x3c(k) else 0.0);
-      }
-      when Geom.spherical {
-        const r  = x1c(i);
-        const th = if act2 then x2c(j) else 0.5*pi;
-        const ph = if act3 then x3c(k) else 0.0;
-        return (r*sin(th)*cos(ph), r*sin(th)*sin(ph), r*cos(th));
-      }
+    if geom == Geom.polar {
+      const R = x1c(i);
+      const ph = if act2 then x2c(j) else 0.0;
+      return (R*cos(ph), R*sin(ph), if act3 then x3c(k) else 0.0);
     }
-    return (x1c(i), 0.0, 0.0);
+    if geom == Geom.spherical {
+      const r  = x1c(i);
+      const th = if act2 then x2c(j) else 0.5*pi;
+      const ph = if act3 then x3c(k) else 0.0;
+      return (r*sin(th)*cos(ph), r*sin(th)*sin(ph), r*cos(th));
+    }
+    if geom == Geom.cylindrical then    // meridional (R, z) plane
+      return (x1c(i), if act2 then x2c(j) else 0.0, 0.0);
+    return (x1c(i), if act2 then x2c(j) else 0.0,   // cartesian
+                    if act3 then x3c(k) else 0.0);
   }
 
   /* cylindrical radius of a cell centre (distance from the rotation
      axis), used by the locally-isothermal sound-speed profile */
   inline proc cylRadiusAt(i: int, j: int, k: int): real {
-    select geom {
-      when Geom.cylindrical, Geom.polar do return abs(x1c(i));
-      when Geom.spherical do
-        return x1c(i)*(if act2 then sin(x2c(j)) else 1.0);
-      otherwise do return 1.0;
-    }
+    if geom == Geom.cylindrical || geom == Geom.polar then
+      return abs(x1c(i));
+    if geom == Geom.spherical then
+      return x1c(i)*(if act2 then sin(x2c(j)) else 1.0);
     return 1.0;
   }
 

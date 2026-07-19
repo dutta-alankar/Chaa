@@ -63,8 +63,10 @@ nav:
       - Plotting & analysis: user-guide/plotting.md
       - Stopping & restarting: user-guide/restart.md
       - Running in parallel: user-guide/parallel.md
+      - Running on GPUs: user-guide/gpu.md
   - Set up your own problem: custom-problem.md
   - Architecture & code flow: architecture.md
+  - Running on Freya (MPCDF): freya.md
   - Benchmarks & scaling: benchmarks.md
   - Tests:
       - Test suite overview: tests.md

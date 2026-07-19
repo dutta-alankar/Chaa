@@ -15,6 +15,8 @@ module Output {
   use Params, Grid, State;
   use Hdf5IO, Particles;
   use IO, Math;
+  import CompileParams;
+  import Gpu;
 
   const fmtList = outFormats.split(",");
 
@@ -38,6 +40,8 @@ module Output {
     return outDir + "/" + problem + "." + pad4(num) + "." + ext;
 
   proc writeOutputs(num: int, time: real) {
+    // GPU build: the devices own the interior — refresh the host copy
+    if CompileParams.gpuEnabled then Gpu.gpuDownV();
     if numLocales == 1 {
       if doTxt && ndim == 1 then try! writeTxt(num, time);
       if doVtk then try! writeVtk(num, time, 1..nx1, 1..nx2, 1..nx3,
